@@ -6,7 +6,7 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.Promise;
 import org.nms.database.queries.DiscoveryQueries;
-import org.nms.modular.ZMQCommunicationVerticle;
+import org.nms.polling.ZMQCommunicationVerticle;
 import org.nms.routerController.ApiResponse;
 import org.nms.utils.Constants;
 import org.nms.utils.DeviceReachability;
@@ -177,12 +177,6 @@ public class DiscoveryService extends BaseService<JsonObject>
         }
     }
 
-//    public Future<JsonObject> runDiscovery(Long discoveryId)
-//    {
-//        LOGGER.info("Running discovery for ID: {}", discoveryId);
-//        return Future.succeededFuture(ApiResponse.success(new JsonObject().put("message", "Discovery run initiated")).toJson());
-//    }
-
     public Future<JsonObject> runDiscovery(Long discoveryId)
     {
         try
@@ -223,18 +217,18 @@ public class DiscoveryService extends BaseService<JsonObject>
 
                     var row = rows.getJsonArray("rows").getJsonObject(0);
                     var discoveryDetails = new JsonObject()
-                            .put("discovery_id", row.getLong("discovery_id"))
+                            .put("discovery_id", row.getLong(Constants.DISC_ID))
                             .put("discovery_name", row.getString(Constants.DISC_NAME))
                             .put("ip_address", row.getString(Constants.DISC_IP_ADDRESS))
                             .put("port_no", row.getInteger(Constants.DISC_PORT_NO))
                             .put("status", row.getBoolean(Constants.DISC_STATUS))
                             .put("credential_id", row.getLong(Constants.DISC_CREDENTIAL_ID));
 
-                    var ipAddress = discoveryDetails.getString("ip_address");
+                    var ipAddress = discoveryDetails.getString(Constants.DISC_IP_ADDRESS);
                     var portNo = row.getInteger(Constants.DISC_PORT_NO);
-                    var username = row.getString("username");
-                    var password = row.getString("password");
-                    var protocol = row.getString("protocol");
+                    var username = row.getString(Constants.CRED_USERNAME);
+                    var password = row.getString(Constants.CRED_PASSWORD);
+                    var protocol = row.getString(Constants.CRED_PROTOCOL);
 
                     // Perform all blocking operations (ping, port check) in a single executeBlocking
                     vertx.executeBlocking(blockingPromise ->
@@ -323,9 +317,13 @@ public class DiscoveryService extends BaseService<JsonObject>
                                 String details = responseBody.getString("details", "");
 
                                 discoveryDetails.put("status", discoverySuccess)
-                                        .put("lastDiscoveryTime", Instant.now().toString())
+                                        .put("lastdiscoverytime", Instant.now().toString())
                                         .put("message", details);
 
+                                LOGGER.info(
+                                        "Discovery result for ID {}:",
+                                        discoveryDetails
+                                );
                                 // Create the request to send to DBVerticle
                                 update(discoveryDetails)
                                         .onSuccess(updateResponse ->

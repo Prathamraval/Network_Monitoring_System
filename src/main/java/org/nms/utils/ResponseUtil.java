@@ -1,10 +1,10 @@
 package org.nms.utils;
 
-import io.vertx.core.http.HttpServerResponse;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.core.json.JsonObject;
 
-public class ResponseUtil {
+public class ResponseUtil
+{
     public static void handleResponse(RoutingContext ctx, JsonObject result)
     {
         var response = ctx.response();

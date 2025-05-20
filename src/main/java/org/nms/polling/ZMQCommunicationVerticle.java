@@ -1,4 +1,4 @@
-package org.nms.modular;
+package org.nms.polling;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;

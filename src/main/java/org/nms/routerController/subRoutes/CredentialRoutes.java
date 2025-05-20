@@ -1,6 +1,5 @@
 package org.nms.routerController.subRoutes;
 
-import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import org.nms.service.CredentialService;

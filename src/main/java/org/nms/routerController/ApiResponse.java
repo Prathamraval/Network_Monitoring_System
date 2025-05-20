@@ -26,17 +26,7 @@ public class ApiResponse
      * @param data The response data
      * @return ApiResponse instance
      */
-    public static ApiResponse successMethod(JsonObject data)
-    {
-        return new ApiResponse(200, true, data, null);
-    }
 
-    /**
-     * Create a success response with data and a message
-     * @param data The response data
-     * @param message Success message
-     * @return ApiResponse instance
-     */
     public static ApiResponse success(JsonObject data, String message)
     {
         return new ApiResponse(200, true, data, message);

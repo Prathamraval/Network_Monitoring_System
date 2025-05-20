@@ -121,12 +121,11 @@ public class Constants
     public static final String DISC_MESSAGE = "message";
 
     // Polling column names
-    public static final String POLLING_MONITOR_ID = "monitor_id";
+    public static final String MONITOR_ID = "monitor_id";
     public static final String POLLING_DATA = "data";
     public static final String POLLING_TIMESTAMP = "timestamp";
 
     // Provision column names
-    public static final String MONITOR_ID = "monitorId";
     public static final String DISCOVERY_ID = "discoveryId";
     public static final String PROVISION_STATUS = "provision_status";
 }

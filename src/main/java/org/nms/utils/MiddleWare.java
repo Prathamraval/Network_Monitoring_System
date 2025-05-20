@@ -93,7 +93,8 @@ public class MiddleWare
     {
         var idParam = ctx.pathParam(id);
 
-        if (idParam == null || idParam.trim().isEmpty()) {
+        if (idParam == null || idParam.trim().isEmpty())
+        {
             LOGGER.error("Missing or empty ID in path: {}", id);
             respondWithError(ctx, 400, "Missing or empty ID in path.");
             return;

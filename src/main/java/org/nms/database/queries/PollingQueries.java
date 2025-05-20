@@ -46,6 +46,4 @@ public class PollingQueries
         SET data = $1, timestamp = $2
         WHERE monitor_id = $3;
     """;
-
-
 }

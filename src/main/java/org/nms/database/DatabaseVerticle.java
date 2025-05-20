@@ -81,6 +81,7 @@ public class DatabaseVerticle extends AbstractVerticle {
                 var request = handler.body();
                 var query = request.getString(Constants.DB_QUERY);
                 var jsonParams = request.getJsonArray(Constants.DB_PARAMS);
+
                 var params = DbUtil.jsonArrayToTuple(jsonParams);
 
                 dbService.executePreparedQuery(query, params)
@@ -106,12 +107,28 @@ public class DatabaseVerticle extends AbstractVerticle {
 
         for (var row : rows)
         {
-            var jsonRow = new JsonObject();
-            for (var i = 0; i < row.size(); i++)
+            try
             {
-                jsonRow.put(row.getColumnName(i), row.getValue(i));
+                var jsonRow = new JsonObject();
+                for (var i = 0; i < row.size(); i++)
+                {
+                    try
+                    {
+                        jsonRow.put(row.getColumnName(i), row.getValue(i));
+                    }
+                    catch (Exception exception)
+                    {
+                        LOGGER.error("Error processing column {}: {}", row.getColumnName(i), exception.getMessage());
+                        continue;
+                    }
+                }
+                rowsArray.add(jsonRow);
             }
-            rowsArray.add(jsonRow);
+            catch (Exception exception)
+            {
+                LOGGER.error("Error processing row: {}", exception.getMessage());
+                continue;
+            }
         }
 
         result.put("rowCount", rows.rowCount());

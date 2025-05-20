@@ -39,12 +39,12 @@ public abstract class BaseService<T>
     {
         var json =  entity;
         LOGGER.info("Creating entity: {}", json);
-
         try
         {
             var dbRequest = new JsonObject()
                     .put(Constants.DB_QUERY, getInsertQuery())
                     .put(Constants.DB_PARAMS, DbUtil.jsonToJsonArray(json, getJsonToParamsCreateMapping()));
+            LOGGER.info("DB Request: {}", dbRequest);
 
             var promise = Promise.<JsonObject>promise();
 
@@ -71,6 +71,7 @@ public abstract class BaseService<T>
 
                         var response = getResponseMapper().apply(json)
                                 .put(getIdField(), row.getLong("id"));
+                        LOGGER.info("Response: {}", response);
                         promise.complete(ApiResponse.success(response).toJson());
                     }
                     else
@@ -104,6 +105,7 @@ public abstract class BaseService<T>
         {
             var dbRequest = new JsonObject()
                     .put(Constants.DB_QUERY, getSelectAllQuery());
+
             var promise = Promise.<JsonObject>promise();
 
             vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_WITHOUT_PARAM_EVENTBUS, dbRequest, reply ->
@@ -179,6 +181,7 @@ public abstract class BaseService<T>
             var dbRequest = new JsonObject()
                     .put(Constants.DB_QUERY, query)
                     .put(Constants.DB_PARAMS, params);
+
             var promise = Promise.<JsonObject>promise();
 
             vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_PARAM_EVENTBUS, dbRequest, reply ->
@@ -240,6 +243,7 @@ public abstract class BaseService<T>
             var dbRequest = new JsonObject()
                     .put(Constants.DB_QUERY, query)
                     .put(Constants.DB_PARAMS, params);
+
             var promise = Promise.<JsonObject>promise();
 
             vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_PARAM_EVENTBUS, dbRequest, reply ->
@@ -250,6 +254,7 @@ public abstract class BaseService<T>
                     {
                         LOGGER.info("Rows: {}", reply.result().body());
                         var rows = reply.result().body();
+
                         if (rows.getInteger("rowCount", 0) == 0)
                         {
                             LOGGER.error("Failed to update entity");
@@ -259,9 +264,7 @@ public abstract class BaseService<T>
 
                         LOGGER.info("Entity updated successfully");
 
-                        var response = new JsonObject().put("message", "Entity updated successfully with ID: " + id);
-
-                        promise.complete(ApiResponse.success(response).toJson());
+                        promise.complete(ApiResponse.success("Entity updated successfully with ID: " + id).toJson());
                     }
                     else
                     {
@@ -337,6 +340,43 @@ public abstract class BaseService<T>
         }
     }
 
+    public Future<JsonObject> customQueryExecutor(JsonObject dbRequest )
+    {
+        try
+        {
+            LOGGER.info("Executing custom query: {}", dbRequest);
+            var promise = Promise.<JsonObject>promise();
+
+            vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_PARAM_EVENTBUS, dbRequest, reply ->
+            {
+                try
+                {
+                    if (reply.succeeded())
+                    {
+                        promise.complete(ApiResponse.success(new JsonObject().put("result",reply.result().body() )).toJson());
+                    }
+                    else
+                    {
+                        handleDbError(reply.cause(), promise);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    LOGGER.error("Error processing DB response: {}", exception.getMessage());
+                    promise.complete(ApiResponse.error(500, "Error processing DB response").toJson());
+                }
+            });
+
+            return promise.future();
+        }
+        catch (Exception exception)
+        {
+            LOGGER.error("Error handling retrieval: {}", exception.getMessage());
+            return Future.succeededFuture(ApiResponse.error(500, exception.getMessage()).toJson());
+        }
+    }
+
+
     private void handleDbError(Throwable cause, Promise<JsonObject> promise)
     {
         LOGGER.error("Database operation failed: {}", cause.getMessage());
@@ -347,11 +387,15 @@ public abstract class BaseService<T>
         {
             statusCode = 409;
             errorMessage = "Entity with the same name already exists.";
+            LOGGER.info(
+                    "Duplicate key value error: {}. Status code: {}",
+                    errorMessage, statusCode
+            );
         }
         else if (errorMessage != null && errorMessage.contains("violates foreign key"))
         {
             statusCode = 400;
-            errorMessage = "Foreign Id doesn't exist";
+            errorMessage = "Foreign key Violation error.";
         }
 
         promise.complete(ApiResponse.error(statusCode, errorMessage).toJson());

@@ -2,7 +2,6 @@ package org.nms.database.queries;
 
 public class CredentialQueries
 {
-
     // Create the credential_profiles table
     public static final String CREATE_CREDENTIAL_PROFILES_TABLE = """
             CREATE TABLE IF NOT EXISTS credential_profiles (

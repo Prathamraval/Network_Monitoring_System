@@ -10,7 +10,7 @@ import org.nms.utils.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.awt.image.LookupOp;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 public class PollingService extends BaseService<JsonObject>
@@ -18,9 +18,10 @@ public class PollingService extends BaseService<JsonObject>
     private static final Logger LOGGER = LoggerFactory.getLogger(PollingService.class);
 
     public static final String POLLING_ID = "monitorId";
+    private static final String EVENT_PROVISION_CHANGED = "provision.changed";
 
     public static final String[] CREATE_PARAM_MAPPING = {
-            Constants.POLLING_MONITOR_ID,
+            Constants.MONITOR_ID,
             Constants.POLLING_DATA,
             Constants.POLLING_TIMESTAMP
     };
@@ -28,11 +29,63 @@ public class PollingService extends BaseService<JsonObject>
     public static final String[] UPDATE_PARAM_MAPPING = {
             Constants.POLLING_DATA,
             Constants.POLLING_TIMESTAMP,
-            Constants.POLLING_MONITOR_ID
+            Constants.MONITOR_ID
     };
+
+    private final ConcurrentHashMap<Long, JsonObject> cache = new ConcurrentHashMap<>();
 
     public PollingService() {
         super();
+        setupEventBusConsumer();
+    }
+
+    private void setupEventBusConsumer()
+    {
+        vertx.eventBus().<JsonObject>consumer(EVENT_PROVISION_CHANGED, message ->
+        {
+
+            var event =  message.body();
+
+            var action = event.getString("action");
+            var provision = event.getJsonObject("provision");
+
+            var monitorId = provision != null ? provision.getLong(Constants.MONITOR_ID) : null;
+
+            if (monitorId == null)
+            {
+                LOGGER.warn("Provision ID missing in event: {}", event.encodePrettily());
+                return;
+            }
+
+            switch (action)
+            {
+                case "create":
+                    // Add provision to cache
+                    cache.put(monitorId, provision);
+                    LOGGER.info("Added provision {} to cache", monitorId);
+                    break;
+
+                case "update":
+                    // Add or update provision in cache
+                    var updateProvision = cache.get(monitorId);
+
+                    if(updateProvision != null)
+                    {
+                        var status = provision.getBoolean(Constants.PROVISION_STATUS, true);
+                        cache.put(monitorId, updateProvision.put("status",status));
+                        LOGGER.info("Added/Updated provision {} in cache", monitorId);
+                    }
+                    break;
+
+                case "delete":
+                    // Mark provision as inactive
+                    cache.remove(monitorId);
+                    break;
+
+                default:
+                    LOGGER.warn("Unknown action in event: {}", action);
+            }
+        });
     }
 
     @Override
@@ -48,27 +101,32 @@ public class PollingService extends BaseService<JsonObject>
     }
 
     @Override
-    protected String getSelectByIdQuery() {
+    protected String getSelectByIdQuery()
+    {
         return PollingQueries.SELECT_POLLING_PROFILE_BY_ID;
     }
 
     @Override
-    protected String getUpdateQuery() {
+    protected String getUpdateQuery()
+    {
         return PollingQueries.UPDATE_POLLING_DATA_PROFILE;
     }
 
     @Override
-    protected String getDeleteQuery() {
+    protected String getDeleteQuery()
+    {
         return PollingQueries.DELETE_POLLING_PROFILE;
     }
 
     @Override
-    protected String getIdField() {
+    protected String getIdField()
+    {
         return POLLING_ID;
     }
 
     @Override
-    protected String[] getJsonToParamsCreateMapping() {
+    protected String[] getJsonToParamsCreateMapping()
+    {
         return CREATE_PARAM_MAPPING;
     }
 
@@ -77,10 +135,12 @@ public class PollingService extends BaseService<JsonObject>
     {
         return UPDATE_PARAM_MAPPING;
     }
+
     @Override
-    protected Function<JsonObject, JsonObject> getResponseMapper() {
+    protected Function<JsonObject, JsonObject> getResponseMapper()
+    {
         return json -> new JsonObject()
-                .put("monitorId", json.getInteger(Constants.POLLING_MONITOR_ID))
+                .put("monitorId", json.getInteger(Constants.MONITOR_ID))
                 .put("data", json.getJsonObject(Constants.POLLING_DATA))
                 .put("timestamp", json.getString(Constants.POLLING_TIMESTAMP));
     }
@@ -95,7 +155,23 @@ public class PollingService extends BaseService<JsonObject>
 
     public Future<JsonObject> getDeviceToMonitor()
     {
-        LOGGER.info("Fetching devices to monitor from the database");
+        LOGGER.info("Fetching devices to monitor");
+
+        // Check if cache has active provisions
+        var activeProvisions = new JsonArray();
+        cache.forEach((provisionId, provision) ->
+        {
+            if (provision.getBoolean("status", true))
+            {
+                activeProvisions.add(provision);
+            }
+        });
+
+        if (!activeProvisions.isEmpty())
+        {
+            LOGGER.info("cache hit, {} active devices from cache", activeProvisions.size());
+            return Future.succeededFuture(new JsonObject().put("provisions", activeProvisions));
+        }
 
         try
         {
@@ -108,10 +184,7 @@ public class PollingService extends BaseService<JsonObject>
                         var rows = reply.body();
                         var provisionList = new JsonArray();
 
-                        LOGGER.info(
-                                "Received rows: {}",
-                                rows.encodePrettily()
-                        );
+                        LOGGER.info("Received rows: {}", rows.size());
                         var rowsArray = rows.getJsonArray("rows", new JsonArray());
                         for (var i = 0; i < rowsArray.size(); i++)
                         {
@@ -119,14 +192,16 @@ public class PollingService extends BaseService<JsonObject>
                             {
                                 var row = rowsArray.getJsonObject(i);
                                 var provision = new JsonObject()
-                                        .put("monitor_id", row.getInteger(Constants.POLLING_MONITOR_ID))
+                                        .put("monitor_id", row.getInteger(Constants.MONITOR_ID))
                                         .put("ip", row.getString(Constants.DISC_IP_ADDRESS))
                                         .put("port", row.getInteger(Constants.DISC_PORT_NO))
                                         .put("username", row.getString(Constants.CRED_USERNAME))
                                         .put("password", row.getString(Constants.CRED_PASSWORD))
-                                        .put("protocol", row.getString(Constants.CRED_PROTOCOL));
+                                        .put("protocol", row.getString(Constants.CRED_PROTOCOL))
+                                        .put("status", row.getBoolean(Constants.PROVISION_STATUS, true));
 
                                 provisionList.add(provision);
+                                cache.put(row.getLong(Constants.MONITOR_ID), provision);
                             }
                             catch (Exception exception)
                             {
@@ -134,12 +209,12 @@ public class PollingService extends BaseService<JsonObject>
                             }
                         }
 
+                        LOGGER.info("Cached {} devices to monitor", provisionList.size());
                         return Future.succeededFuture(new JsonObject().put("provisions", provisionList));
                     })
                     .recover(error ->
                     {
                         LOGGER.error("Failed to fetch devices: {}", error.getMessage());
-
                         return Future.succeededFuture(ApiResponse.error(500, "Failed to fetch devices: " + error.getMessage()).toJson());
                     });
         }
@@ -150,7 +225,8 @@ public class PollingService extends BaseService<JsonObject>
         }
     }
 
-    public Future<JsonObject> insertPollingData(JsonObject params) {
+    public Future<JsonObject> insertPollingData(JsonObject params)
+    {
         LOGGER.info("Inserting polling data: {}", params);
         return create(params);
     }

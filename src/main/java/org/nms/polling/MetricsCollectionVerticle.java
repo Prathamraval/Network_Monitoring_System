@@ -1,4 +1,4 @@
-package org.nms.modular;
+package org.nms.polling;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
@@ -121,15 +121,12 @@ public class MetricsCollectionVerticle extends AbstractVerticle
         // Avoid concurrent collection attempts
         if (isCollecting.compareAndSet(false, true))
         {
-            LOGGER.info("Starting metrics collection cycle");
-
             // Get devices to monitor asynchronously
             pollingService.getDeviceToMonitor().onComplete(result ->
             {
                 if (result.succeeded())
                 {
                     var devices = result.result();
-                    LOGGER.info("Devices to monitor: {}", devices.encodePrettily());
 
                     var provisions = devices.getJsonArray("provisions");
                     if (provisions != null && !provisions.isEmpty())
@@ -164,14 +161,8 @@ public class MetricsCollectionVerticle extends AbstractVerticle
         for (var i = 0; i < provisions.size(); i++)
         {
             var provision = provisions.getJsonObject(i);
+
             LOGGER.info("Processing provision: {}", provision.encodePrettily());
-//            var deviceInput = new JsonObject()
-//                    .put("ip", provision.getString(Constants.DISC_IP_ADDRESS))
-//                    .put("port", provision.getInteger(Constants.DISC_PORT_NO))
-//                    .put("username", provision.getString(Constants.CRED_USERNAME))
-//                    .put("password", provision.getString(Constants.CRED_PASSWORD))
-//                    .put("protocol", provision.getString(Constants.CRED_PROTOCOL))
-//                    .put("monitor_id", provision.getInteger(Constants.POLLING_MONITOR_ID));  // Include monitorId in the request
 
             batchInput.add(provision);
         }
@@ -277,7 +268,7 @@ public class MetricsCollectionVerticle extends AbstractVerticle
 
         // Store the entire metrics object as JSONB
         var params = new JsonObject()
-                .put("monitor_id", monitorId)
+                .put(Constants.MONITOR_ID, monitorId)
                 .put("data", deviceMetrics)
                 .put("timestamp", timestamp.toString());
 

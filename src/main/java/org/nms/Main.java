@@ -3,11 +3,10 @@ package org.nms;
 import io.vertx.core.Future;
 import io.vertx.core.Verticle;
 import io.vertx.core.Vertx;
-import org.nms.modular.MetricsCollectionVerticle;
+import org.nms.polling.MetricsCollectionVerticle;
 import org.nms.routerController.HttpVerticle;
 import org.nms.database.DatabaseVerticle;
-//import org.nms.modular.MetricsCollectionVerticle;
-import org.nms.modular.ZMQCommunicationVerticle;
+import org.nms.polling.ZMQCommunicationVerticle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,14 +66,19 @@ public class Main
                 });
     }
 
-    private static void ensureLogDirectoryExists() {
+    private static void ensureLogDirectoryExists()
+    {
         var logDir = new File("logs");
-        if (!logDir.exists()) {
+        if (!logDir.exists())
+        {
             boolean created = logDir.mkdirs();
-            if (created) {
-                System.out.println("Created logs directory");
-            } else {
-                System.err.println("Failed to create logs directory");
+            if (created)
+            {
+                LOGGER.info("Created logs directory");
+            }
+            else
+            {
+                LOGGER.info("Failed to create logs directory");
             }
         }
     }
@@ -88,8 +92,8 @@ public class Main
                 .onSuccess(id ->
                         LOGGER.info("{} verticle deployed with ID {}", name, id)
                 )
-                .onFailure(err ->
-                        LOGGER.error("{} verticle deployment failed: {}", name, err.getMessage())
+                .onFailure(error ->
+                        LOGGER.error("{} verticle deployment failed: {}", name, error.getMessage())
                 );
     }
 
@@ -161,19 +165,25 @@ public class Main
         }
 
         // Undeploy verticles
-        for (Map.Entry<String, String> entry : deployedVerticles.entrySet())
+        for (var entry : deployedVerticles.entrySet())
         {
-            var name = entry.getKey();
-            var id = entry.getValue();
-            LOGGER.info("Undeploying {} verticle", name);
+            try {
+                var name = entry.getKey();
+                var id = entry.getValue();
+                LOGGER.info("Undeploying {} verticle", name);
 
-            VERTX.undeploy(id)
-                    .onSuccess(v ->
-                            LOGGER.info("{} verticle undeployed", name)
-                    )
-                    .onFailure(err ->
-                            LOGGER.warn("Failed to undeploy {} verticle: {}", name, err.getMessage())
-                    );
+                VERTX.undeploy(id)
+                        .onSuccess(v ->
+                                LOGGER.info("{} verticle undeployed", name)
+                        )
+                        .onFailure(err ->
+                                LOGGER.warn("Failed to undeploy {} verticle: {}", name, err.getMessage())
+                        );
+            }
+            catch (Exception exception)
+            {
+                LOGGER.error("Error undeploying verticle {}: {}", entry.getKey(), exception.getMessage());
+            }
         }
 
         // Give some time for undeployment to complete, then close Vertx

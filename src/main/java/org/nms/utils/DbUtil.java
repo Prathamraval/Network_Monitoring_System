@@ -4,6 +4,8 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.sqlclient.Tuple;
 
+import java.util.logging.Logger;
+
 public class DbUtil
 {
     public static Tuple jsonArrayToTuple(JsonArray jsonArray)
