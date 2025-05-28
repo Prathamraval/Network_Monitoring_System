@@ -1,35 +1,50 @@
 package org.nms.utils;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.logging.Logger;
 
 public class DeviceReachability
 {
-
-    public static void performPingCheck(String ipAddress) throws Exception
+    public static boolean performPingCheck(String ipAddress)
     {
-        var pb = new ProcessBuilder("fping", "-c1", "-t1000", ipAddress); // -c1 = 1 ping, -t = 1s timeout
-
-        pb.redirectErrorStream(true);
-
-        var process = pb.start();
-
-        var exitCode = process.waitFor();
-
-        if (exitCode != 0)
+        try
         {
-            throw new Exception("fping check failed: Device is not reachable");
+            // Use a simple ping command: ping <ipAddress>
+            ProcessBuilder pb = new ProcessBuilder("ping", "-c", "1", "-W", "2", ipAddress);
+            pb.redirectErrorStream(true);
+
+            var process = pb.start();
+            var exitCode = process.waitFor();
+
+            if (exitCode == 0)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
         }
-
+        catch (Exception exception)
+        {
+            return false;
+        }
     }
 
-    public static void performPortCheck(String ipAddress, Integer portNo) throws Exception
+    public static boolean performPortCheck(String ipAddress, Integer portNo)
     {
-        var socket = new Socket();
-
-        socket.connect(new InetSocketAddress(ipAddress, portNo), 1000); // 1s timeout
-
-        socket.close();
+        try
+        {
+            var socket = new Socket();
+            socket.connect(new InetSocketAddress(ipAddress, portNo), 1000); // 1s timeout
+            socket.close();
+            return true;
+        }
+        catch (IOException exception)
+        {
+            return false;
+        }
     }
-
 }

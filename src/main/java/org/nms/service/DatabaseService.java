@@ -9,7 +9,7 @@ import io.vertx.sqlclient.Tuple;
 import io.vertx.sqlclient.RowSet;
 import io.vertx.core.Future;
 import io.vertx.sqlclient.Row;
-import org.nms.Main;
+import org.nms.BootStrap;
 import org.nms.utils.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,12 +22,12 @@ public class DatabaseService
 
     private DatabaseService() {}
 
-    public static synchronized DatabaseService getInstance()
+    public static  DatabaseService getInstance()
     {
         if (instance == null)
         {
             instance = new DatabaseService();
-            connect(Main.getVertx());
+            connect(BootStrap.getVertx());
         }
         return instance;
     }

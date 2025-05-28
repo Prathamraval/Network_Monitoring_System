@@ -1,12 +1,12 @@
-package org.nms.routerController.subRoutes;
+package org.nms.endPoints.subRoutes;
 
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import org.nms.service.CredentialService;
 
-public class CredentialRoutes extends BaseRoutes<JsonObject>
+public class CredentialEndPoint extends BaseEndPoint<JsonObject>
 {
-    public CredentialRoutes()
+    public CredentialEndPoint()
     {
         super(new CredentialService(), CredentialService.CREDENTIAL_ID);
     }

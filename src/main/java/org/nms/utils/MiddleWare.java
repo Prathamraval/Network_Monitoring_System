@@ -1,7 +1,7 @@
 package org.nms.utils;
 
 import io.vertx.ext.web.RoutingContext;
-import org.nms.routerController.ApiResponse;
+import org.nms.endPoints.ApiResponse;
 import org.nms.service.CredentialService;
 import org.nms.service.DiscoveryService;
 import org.slf4j.Logger;
@@ -23,10 +23,10 @@ public class MiddleWare
 
     private static final String IP_ADDRESS = Constants.DISC_IP_ADDRESS;
 
-    public static void validateRequestBody(RoutingContext ctx)
+    public static void validateRequestBody(RoutingContext context)
     {
-        var path = ctx.normalizedPath();
-        var method = ctx.request().method().name();
+        var path = context.normalizedPath();
+        var method = context.request().method().name();
         LOGGER.info("Validating request body for route: {} method: {}", path, method);
 
         try
@@ -42,28 +42,31 @@ public class MiddleWare
             }
             else
             {
-                respondWithError(ctx, 400, "Unknown API path.");
+                ResponseUtil.handleResponse(context, ApiResponse.error(400, "Unknown API path.").toJson());
                 return;
             }
 
-            if (validateBody(ctx, requiredParams))
+            if (validateBody(context, requiredParams))
             {
-                ctx.next();
+                context.next();
             }
         }
         catch (Exception exception)
         {
             LOGGER.error("Validation error: {}", exception.getMessage());
-            respondWithError(ctx, 400, MESSAGE_INVALID_JSON);
+
+            ResponseUtil.handleResponse(context, ApiResponse.error(400, MESSAGE_INVALID_JSON).toJson());
+
         }
     }
 
-    public static boolean validateBody(RoutingContext ctx, List<String> requiredParams)
+    public static boolean validateBody(RoutingContext context, List<String> requiredParams)
     {
-        var body = ctx.getBodyAsJson();
+        var body = context.getBodyAsJson();
         if (body == null || body.isEmpty())
         {
-            respondWithError(ctx, 400, MESSAGE_REQUIRED_BODY);
+            ResponseUtil.handleResponse(context, ApiResponse.error(400, MESSAGE_REQUIRED_BODY).toJson());
+
             return false;
         }
 
@@ -72,7 +75,8 @@ public class MiddleWare
             var ip = body.getString(IP_ADDRESS);
             if (!isValidIpAddress(ip))
             {
-                respondWithError(ctx, 400, MESSAGE_INVALID_IP);
+                ResponseUtil.handleResponse(context, ApiResponse.error(400, MESSAGE_INVALID_IP).toJson());
+
                 return false;
             }
         }
@@ -82,33 +86,38 @@ public class MiddleWare
             if (!body.containsKey(param) || body.getValue(param) == null
                     || (body.getValue(param) instanceof String && body.getString(param).trim().isEmpty()))
             {
-                respondWithError(ctx, 400, String.format(MESSAGE_INVALID_FIELD, param));
+                ResponseUtil.handleResponse(context, ApiResponse.error(400, String.format(MESSAGE_INVALID_FIELD, param)).toJson());
+
                 return false;
             }
         }
         return true;
     }
 
-    public static void validateContextPath(RoutingContext ctx, String id)
+    public static void validateContextPath(RoutingContext context, String id)
     {
-        var idParam = ctx.pathParam(id);
+        var idParam = context.pathParam(id);
 
         if (idParam == null || idParam.trim().isEmpty())
         {
             LOGGER.error("Missing or empty ID in path: {}", id);
-            respondWithError(ctx, 400, "Missing or empty ID in path.");
+
+            ResponseUtil.handleResponse(context, ApiResponse.error(400, "Missing or empty ID in path.").toJson());
+
             return;
         }
 
         try
         {
             Long.parseLong(idParam);
-            ctx.next();
+            context.next();
         }
         catch (NumberFormatException exception)
         {
             LOGGER.error("Invalid ID format in path: {}", idParam);
-            respondWithError(ctx, 400, MESSAGE_INVALID_PATH_PARAM_FORMAT);
+
+            ResponseUtil.handleResponse(context, ApiResponse.error(400, MESSAGE_INVALID_PATH_PARAM_FORMAT).toJson());
+
         }
     }
 
@@ -123,12 +132,4 @@ public class MiddleWare
         return pattern.matcher(ip).matches();
     }
 
-    public static void respondWithError(RoutingContext ctx, int code, String message)
-    {
-        var errorResponse = ApiResponse.error(code, message);
-        ctx.response()
-                .setStatusCode(code)
-                .putHeader("content-type", "application/json")
-                .end(errorResponse.toJson().encodePrettily());
-    }
 }

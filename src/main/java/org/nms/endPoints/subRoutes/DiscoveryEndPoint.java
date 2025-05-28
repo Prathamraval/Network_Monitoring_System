@@ -1,21 +1,22 @@
-package org.nms.routerController.subRoutes;
+package org.nms.endPoints.subRoutes;
 
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
-import org.nms.routerController.ApiResponse;
+import org.nms.endPoints.ApiResponse;
 import org.nms.service.DiscoveryService;
+import org.nms.utils.Constants;
 import org.nms.utils.ResponseUtil;
 
-public class DiscoveryRoutes extends BaseRoutes<JsonObject>
+public class DiscoveryEndPoint extends BaseEndPoint<JsonObject>
 {
     private static final String RUN_DISCOVERY_PATH = "/run/:discoveryId";
     private static final String DISCOVERY_STATUS_PATH = "/status/:status";
     private static final String DISCOVERY_STATUS = "status";
     private final DiscoveryService discoveryService;
 
-    public DiscoveryRoutes()
+    public DiscoveryEndPoint()
     {
-        super(new DiscoveryService(), "discoveryId");
+        super(new DiscoveryService(), Constants.DISCOVERY_ID);
         this.discoveryService = (DiscoveryService) service;
     }
 
@@ -27,17 +28,14 @@ public class DiscoveryRoutes extends BaseRoutes<JsonObject>
                 {
                     try
                     {
-                        var discoveryId = Long.parseLong(ctx.pathParam("discoveryId"));
+                        var discoveryId = Long.parseLong(ctx.pathParam(Constants.DISCOVERY_ID));
                         discoveryService.runDiscovery(discoveryId)
                                 .onSuccess(result -> ResponseUtil.handleResponse(ctx, result))
-                                .onFailure(error -> ResponseUtil.handleResponse(ctx, new JsonObject().put("error", error.getMessage())));
+                                .onFailure(error -> ResponseUtil.handleResponse(ctx, ApiResponse.error(400, error.getMessage()).toJson()));
                     }
                     catch (NumberFormatException exception)
                     {
-                        ctx.response()
-                                .setStatusCode(400)
-                                .putHeader("content-type", "application/json")
-                                .end(new JsonObject().put("error", "Invalid discovery ID format").encodePrettily());
+                        ResponseUtil.handleResponse(ctx, ApiResponse.error(400, "Invalid discovery ID format").toJson());
                     }
                 });
 
@@ -49,11 +47,11 @@ public class DiscoveryRoutes extends BaseRoutes<JsonObject>
                         var status = Boolean.parseBoolean(ctx.pathParam(DISCOVERY_STATUS));
                         discoveryService.getDiscoveriesByStatus(status)
                                 .onSuccess(result -> ResponseUtil.handleResponse(ctx, result))
-                                .onFailure(error -> ResponseUtil.handleResponse(ctx, new JsonObject().put("error", error.getMessage())));
+                                .onFailure(error -> ResponseUtil.handleResponse(ctx, new JsonObject().put(Constants.ERROR, error.getMessage())));
                     }
                     catch (Exception exception)
                     {
-                        ResponseUtil.handleResponse(ctx, ApiResponse.error(400, "Invalid status format. Must be true or false").toJson());
+                        ResponseUtil.handleResponse(ctx, ApiResponse.error(400, "Invalid status format").toJson());
                     }
                 });
     }

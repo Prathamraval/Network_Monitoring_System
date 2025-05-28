@@ -5,19 +5,23 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.nms.database.queries.PollingQueries;
 import org.nms.database.queries.ProvisionQueries;
-import org.nms.routerController.ApiResponse;
+import org.nms.endPoints.ApiResponse;
 import org.nms.utils.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
+import java.util.HashMap;
 import java.util.function.Function;
 
 public class PollingService extends BaseService<JsonObject>
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(PollingService.class);
 
-    public static final String POLLING_ID = "monitorId";
+    public static final String MONITORID = "monitorId";
     private static final String EVENT_PROVISION_CHANGED = "provision.changed";
 
     public static final String[] CREATE_PARAM_MAPPING = {
@@ -32,7 +36,7 @@ public class PollingService extends BaseService<JsonObject>
             Constants.MONITOR_ID
     };
 
-    private final ConcurrentHashMap<Long, JsonObject> cache = new ConcurrentHashMap<>();
+    public static final HashMap<Long, JsonObject> cache = new HashMap<>();
 
     public PollingService() {
         super();
@@ -43,12 +47,9 @@ public class PollingService extends BaseService<JsonObject>
     {
         vertx.eventBus().<JsonObject>consumer(EVENT_PROVISION_CHANGED, message ->
         {
-
-            var event =  message.body();
-
-            var action = event.getString("action");
+            var event = message.body();
+            var action = event.getString(Constants.ACTION);
             var provision = event.getJsonObject("provision");
-
             var monitorId = provision != null ? provision.getLong(Constants.MONITOR_ID) : null;
 
             if (monitorId == null)
@@ -60,26 +61,31 @@ public class PollingService extends BaseService<JsonObject>
             switch (action)
             {
                 case "create":
-                    // Add provision to cache
+                    // Add provision to cache with last_pool
                     cache.put(monitorId, provision);
-                    LOGGER.info("Added provision {} to cache", monitorId);
+                    LOGGER.info("Added provision {} to cache with last_pool: {}", provision, provision.getString("last_pool"));
                     break;
 
                 case "update":
-                    // Add or update provision in cache
-                    var updateProvision = cache.get(monitorId);
-
-                    if(updateProvision != null)
+                    // Update provision in cache, preserving last_pool unless provided
+                    var existingProvision = cache.get(monitorId);
+                    if (existingProvision != null)
                     {
-                        var status = provision.getBoolean(Constants.PROVISION_STATUS, true);
-                        cache.put(monitorId, updateProvision.put("status",status));
-                        LOGGER.info("Added/Updated provision {} in cache", monitorId);
+                        var updatedProvision = existingProvision.copy();
+                        updatedProvision.put(Constants.STATUS, provision.getBoolean(Constants.PROVISION_STATUS, true));
+                        if (provision.containsKey(Constants.LAST_POOL))
+                        {
+                            updatedProvision.put(Constants.LAST_POOL, provision.getString(Constants.LAST_POOL));
+                        }
+                        cache.put(monitorId, updatedProvision);
+                        LOGGER.info("Updated provision {} in cache, last_pool: {}", monitorId, updatedProvision.getString("last_pool"));
                     }
                     break;
 
                 case "delete":
-                    // Mark provision as inactive
+                    // Remove provision from cache
                     cache.remove(monitorId);
+                    LOGGER.info("Removed provision {} from cache", monitorId);
                     break;
 
                 default:
@@ -121,7 +127,7 @@ public class PollingService extends BaseService<JsonObject>
     @Override
     protected String getIdField()
     {
-        return POLLING_ID;
+        return MONITORID;
     }
 
     @Override
@@ -140,94 +146,87 @@ public class PollingService extends BaseService<JsonObject>
     protected Function<JsonObject, JsonObject> getResponseMapper()
     {
         return json -> new JsonObject()
-                .put("monitorId", json.getInteger(Constants.MONITOR_ID))
-                .put("data", json.getJsonObject(Constants.POLLING_DATA))
-                .put("timestamp", json.getString(Constants.POLLING_TIMESTAMP));
+                .put(MONITORID, json.getInteger(Constants.MONITOR_ID))
+                .put(Constants.DATA, json.getJsonObject(Constants.POLLING_DATA))
+                .put(Constants.POLLING_TIMESTAMP, json.getString(Constants.POLLING_TIMESTAMP));
     }
 
     @Override
-    protected Function<JsonObject, JsonObject> getRowToResponseMapper() {
+    protected Function<JsonObject, JsonObject> getRowToResponseMapper()
+    {
         return row -> new JsonObject()
-                .put("monitorId", row.getInteger("monitor_id"))
-                .put("data", row.getJsonObject("data"))
-                .put("timestamp", row.getString("timestamp"));
+                .put(MONITORID, row.getInteger(Constants.MONITOR_ID))
+                .put(Constants.DATA, row.getJsonObject(Constants.POLLING_DATA))
+                .put(Constants.POLLING_TIMESTAMP, row.getString(Constants.POLLING_TIMESTAMP));
     }
 
     public Future<JsonObject> getDeviceToMonitor()
     {
         LOGGER.info("Fetching devices to monitor");
 
-        // Check if cache has active provisions
-        var activeProvisions = new JsonArray();
-        cache.forEach((provisionId, provision) ->
-        {
-            if (provision.getBoolean("status", true))
+            var activeProvisions = new JsonArray();
+            LOGGER.info("Cache: {}, Active provisions: {}", cache, activeProvisions);
+
+            cache.forEach((provisionId, provision) ->
             {
-                activeProvisions.add(provision);
-            }
-        });
+                if (provision.getBoolean(Constants.STATUS, true))
+                {
+                    var lastPoolStr = provision.getString(Constants.LAST_POOL);
 
-        if (!activeProvisions.isEmpty())
-        {
-            LOGGER.info("cache hit, {} active devices from cache", activeProvisions.size());
-            return Future.succeededFuture(new JsonObject().put("provisions", activeProvisions));
-        }
-
-        try
-        {
-            var dbRequest = new JsonObject()
-                    .put(Constants.DB_QUERY, ProvisionQueries.SELECT_ALL_STATUS_TRUE_PROVISIONS);
-
-            return vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_WITHOUT_PARAM_EVENTBUS, dbRequest)
-                    .compose(reply ->
+                    if (lastPoolStr != null)
                     {
-                        var rows = reply.body();
-                        var provisionList = new JsonArray();
-
-                        LOGGER.info("Received rows: {}", rows.size());
-                        var rowsArray = rows.getJsonArray("rows", new JsonArray());
-                        for (var i = 0; i < rowsArray.size(); i++)
+                        try
                         {
+                            OffsetDateTime lastPoolTime;
                             try
                             {
-                                var row = rowsArray.getJsonObject(i);
-                                var provision = new JsonObject()
-                                        .put("monitor_id", row.getInteger(Constants.MONITOR_ID))
-                                        .put("ip", row.getString(Constants.DISC_IP_ADDRESS))
-                                        .put("port", row.getInteger(Constants.DISC_PORT_NO))
-                                        .put("username", row.getString(Constants.CRED_USERNAME))
-                                        .put("password", row.getString(Constants.CRED_PASSWORD))
-                                        .put("protocol", row.getString(Constants.CRED_PROTOCOL))
-                                        .put("status", row.getBoolean(Constants.PROVISION_STATUS, true));
-
-                                provisionList.add(provision);
-                                cache.put(row.getLong(Constants.MONITOR_ID), provision);
+                                lastPoolTime = OffsetDateTime.parse(lastPoolStr);
                             }
-                            catch (Exception exception)
+                            catch (DateTimeParseException exception)
                             {
-                                LOGGER.error("Error processing row {}: {}", i, exception.getMessage());
+                                // Fallback to LocalDateTime with IST offset
+                                lastPoolTime = LocalDateTime.parse(lastPoolStr).atZone(ZoneId.of("Asia/Kolkata")).toOffsetDateTime();
+                            }
+
+                            var nextPollTime = lastPoolTime.plusMinutes(1);
+                            var currentTime = OffsetDateTime.now();
+
+                            if (nextPollTime.isBefore(currentTime))
+                            {
+                                activeProvisions.add(provision);
                             }
                         }
-
-                        LOGGER.info("Cached {} devices to monitor", provisionList.size());
-                        return Future.succeededFuture(new JsonObject().put("provisions", provisionList));
-                    })
-                    .recover(error ->
+                        catch (Exception exception)
+                        {
+                            LOGGER.error("Failed to parse last_pool time for provision {}: {}", provisionId, exception.getMessage());
+                        }
+                    }
+                    else
                     {
-                        LOGGER.error("Failed to fetch devices: {}", error.getMessage());
-                        return Future.succeededFuture(ApiResponse.error(500, "Failed to fetch devices: " + error.getMessage()).toJson());
-                    });
-        }
-        catch (Exception exception)
+                        activeProvisions.add(provision);
+                    }
+                }
+            });
+
+            return Future.succeededFuture(new JsonObject().put(Constants.PROVISIONS, activeProvisions));
+    }
+
+    public void updateDeviceTimestamp(Long monitorId, String timestamp)
+    {
+        var provision = cache.get(monitorId);
+
+        if (provision != null)
         {
-            LOGGER.error("Error in getDeviceToMonitor: {}", exception.getMessage());
-            return Future.succeededFuture(ApiResponse.error(500, "Error fetching devices: " + exception.getMessage()).toJson());
+            cache.put(monitorId, provision.put(Constants.LAST_POOL, timestamp));
+
+            LOGGER.info("Updated last_pool for monitor ID {} to {}", monitorId, timestamp);
         }
     }
 
     public Future<JsonObject> insertPollingData(JsonObject params)
     {
         LOGGER.info("Inserting polling data: {}", params);
+
         return create(params);
     }
 }

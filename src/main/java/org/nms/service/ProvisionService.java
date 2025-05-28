@@ -5,7 +5,7 @@ import io.vertx.core.Promise;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.nms.database.queries.ProvisionQueries;
-import org.nms.routerController.ApiResponse;
+import org.nms.endPoints.ApiResponse;
 import org.nms.utils.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +17,8 @@ public class ProvisionService extends BaseService<JsonObject>
     private static final Logger LOGGER = LoggerFactory.getLogger(ProvisionService.class);
 
     private static final String EVENT_PROVISION_CHANGED = "provision.changed";
+    private static final String PROVISION ="provision" ;
+
 
     public static final String[] CREATE_PARAM_MAPPING = {
             Constants.DISC_ID
@@ -90,13 +92,14 @@ public class ProvisionService extends BaseService<JsonObject>
     protected Function<JsonObject, JsonObject> getRowToResponseMapper()
     {
         return row -> new JsonObject()
-                .put("monitor_id", row.getInteger(Constants.MONITOR_ID))
-                .put("ip", row.getString(Constants.DISC_IP_ADDRESS))
-                .put("port", row.getInteger(Constants.DISC_PORT_NO))
-                .put("username", row.getString(Constants.CRED_USERNAME))
-                .put("password", row.getString(Constants.CRED_PASSWORD))
-                .put("protocol", row.getString(Constants.CRED_PROTOCOL))
-                .put("status", row.getBoolean(Constants.PROVISION_STATUS, true));
+                .put(Constants.MONITOR_ID, row.getInteger(Constants.MONITOR_ID))
+                .put(Constants.DISC_IP_ADDRESS, row.getString(Constants.DISC_IP_ADDRESS))
+                .put(Constants.DISC_PORT_NO, row.getInteger(Constants.DISC_PORT_NO))
+                .put(Constants.CRED_USERNAME, row.getString(Constants.CRED_USERNAME))
+                .put(Constants.CRED_PASSWORD, row.getString(Constants.CRED_PASSWORD))
+                .put(Constants.CRED_PROTOCOL, row.getString(Constants.CRED_PROTOCOL))
+                .put(Constants.STATUS, row.getBoolean(Constants.PROVISION_STATUS, true))
+                .put(Constants.DISC_WAIT_TIME, row.getString(Constants.DISC_WAIT_TIME));
     }
 
     public Future<JsonObject> createProvision(Long discoveryId)
@@ -116,7 +119,7 @@ public class ProvisionService extends BaseService<JsonObject>
                 .compose(reply ->
                 {
                     var rows = reply.body();
-                    if (rows.getInteger("rowCount", 0) == 0)
+                    if (rows.getInteger(Constants.ROW_COUNT, 0) == 0)
                     {
                         LOGGER.error("Discovery ID {} is not eligible for provisioning", discoveryId);
 
@@ -125,12 +128,16 @@ public class ProvisionService extends BaseService<JsonObject>
 
                     return create(new JsonObject().put(Constants.DISC_ID, discoveryId)).compose(insertReply ->
                     {
+                        LOGGER.info(
+                                "insert reply {}",
+                                insertReply
+                        );
                         if (!insertReply.getBoolean("success", true))
                         {
                             return Future.succeededFuture(insertReply);
                         }
 
-                        var monitorId = insertReply.getJsonObject("data").getValue(Constants.MONITOR_ID);
+                        var monitorId = insertReply.getValue(Constants.DATA);
 
                         return getById((Long) monitorId).compose(result ->
                         {
@@ -138,8 +145,8 @@ public class ProvisionService extends BaseService<JsonObject>
                             try
                             {
                                 vertx.eventBus().publish(EVENT_PROVISION_CHANGED, new JsonObject()
-                                        .put("action", "create")
-                                        .put("provision", result.getJsonObject("data").getJsonObject("entity")));
+                                        .put(Constants.ACTION, "create")
+                                        .put(PROVISION, result.getJsonObject("entity")));
                             }
                             catch (Exception exception)
                             {
@@ -149,7 +156,9 @@ public class ProvisionService extends BaseService<JsonObject>
                         });
                     });
                 })
-                .onSuccess(promise::complete)
+                .onSuccess(result->{
+                    promise.complete(ApiResponse.success("Provision Successfull").toJson());
+                })
                 .onFailure(cause ->
                 {
                     LOGGER.error("Failed to create provision for discoveryId {}: {}", discoveryId, cause.getMessage());
@@ -175,7 +184,7 @@ public class ProvisionService extends BaseService<JsonObject>
                         var rows = reply.body();
                         var provisionList = new JsonArray();
 
-                        var rowsArray = rows.getJsonArray("rows", new JsonArray());
+                        var rowsArray = rows.getJsonArray(Constants.ROWS, new JsonArray());
                         for (var i = 0; i < rowsArray.size(); i++)
                         {
                             try
@@ -199,12 +208,14 @@ public class ProvisionService extends BaseService<JsonObject>
                     .recover(error ->
                     {
                         LOGGER.error("Failed to fetch provisions: {}", error.getMessage());
+
                         return Future.succeededFuture(ApiResponse.error(500, "Failed to fetch provisions: " + error.getMessage()).toJson());
                     });
         }
         catch (Exception exception)
         {
             LOGGER.error("Error in getProvisionsByStatus: {}", exception.getMessage());
+
             return Future.succeededFuture(ApiResponse.error(500, "Error fetching provisions: " + exception.getMessage()).toJson());
         }
     }
@@ -215,23 +226,32 @@ public class ProvisionService extends BaseService<JsonObject>
         return super.update(entity).compose(result ->
         {
             LOGGER.info("Provision updated, publishing event");
+
             var provision = entity; // Use input entity for simplicity
+
             vertx.eventBus().publish(EVENT_PROVISION_CHANGED, new JsonObject()
-                    .put("action", "update")
-                    .put("provision", provision));
+                    .put(Constants.ACTION, "update")
+                    .put(PROVISION, provision));
+
             return Future.succeededFuture(result);
         });
     }
 
     @Override
-    public Future<JsonObject> delete(Long id) {
-        return getById(id).compose(result -> {
-            JsonObject provision = result.getJsonObject("response", new JsonObject()).getJsonObject("entity", new JsonObject());
-            return super.delete(id).compose(deleteResult -> {
+    public Future<JsonObject> delete(Long id)
+    {
+        return getById(id).compose(result ->
+        {
+            var provision = result.getJsonObject("response", new JsonObject()).getJsonObject("entity", new JsonObject());
+
+            return super.delete(id).compose(deleteResult ->
+            {
                 LOGGER.info("Provision deleted, publishing event");
+
                 vertx.eventBus().publish(EVENT_PROVISION_CHANGED, new JsonObject()
-                        .put("action", "delete")
-                        .put("provision", provision));
+                        .put(Constants.ACTION, "delete")
+                        .put(PROVISION, provision));
+
                 return Future.succeededFuture(deleteResult);
             });
         });

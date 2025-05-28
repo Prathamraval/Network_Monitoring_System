@@ -1,12 +1,12 @@
-package org.nms.routerController;
+package org.nms.endPoints;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
 import io.vertx.ext.web.Router;
-import org.nms.routerController.subRoutes.CredentialRoutes;
-import org.nms.routerController.subRoutes.DiscoveryRoutes;
-import org.nms.routerController.subRoutes.PollingRoutes;
-import org.nms.routerController.subRoutes.ProvisionRoutes;
+import org.nms.endPoints.subRoutes.CredentialEndPoint;
+import org.nms.endPoints.subRoutes.DiscoveryEndPoint;
+import org.nms.endPoints.subRoutes.PollingEndPoint;
+import org.nms.endPoints.subRoutes.ProvisionEndPoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,10 +27,10 @@ public class HttpVerticle extends AbstractVerticle
         var router = Router.router(vertx);
 
         // Mount sub-routers
-        router.mountSubRouter(CREDENTIAL_PATH, new CredentialRoutes().createRouter(vertx));
-        router.mountSubRouter(DISCOVERY_PATH, new DiscoveryRoutes().createRouter(vertx));
-        router.mountSubRouter(POLLING_PATH, new PollingRoutes().createRouter(vertx));
-        router.mountSubRouter(PROVISION_PATH, new ProvisionRoutes().createRouter(vertx));
+        router.mountSubRouter(CREDENTIAL_PATH, new CredentialEndPoint().createRouter(vertx));
+        router.mountSubRouter(DISCOVERY_PATH, new DiscoveryEndPoint().createRouter(vertx));
+        router.mountSubRouter(POLLING_PATH, new PollingEndPoint().createRouter(vertx));
+        router.mountSubRouter(PROVISION_PATH, new ProvisionEndPoint().createRouter(vertx));
 
         vertx.createHttpServer()
                 .requestHandler(router)

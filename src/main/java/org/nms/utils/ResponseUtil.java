@@ -8,11 +8,12 @@ public class ResponseUtil
     public static void handleResponse(RoutingContext ctx, JsonObject result)
     {
         var response = ctx.response();
-        response.putHeader("content-type", "application/json");
+        response.putHeader(Constants.CONTENT_TYPE, "application/json");
 
-        var statusCode = result.getInteger("statusCode", 500);
+        var statusCode = result.getInteger(Constants.STATUS_CODE, 500);
         response.setStatusCode(statusCode);
 
         response.end(result.encodePrettily());
     }
+
 }

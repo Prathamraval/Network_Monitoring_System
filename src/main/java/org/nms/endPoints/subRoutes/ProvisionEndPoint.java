@@ -1,4 +1,4 @@
-package org.nms.routerController.subRoutes;
+package org.nms.endPoints.subRoutes;
 
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
@@ -7,7 +7,7 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.BodyHandler;
 import org.nms.database.queries.ProvisionQueries;
-import org.nms.routerController.ApiResponse;
+import org.nms.endPoints.ApiResponse;
 import org.nms.service.ProvisionService;
 import org.nms.utils.Constants;
 import org.nms.utils.MiddleWare;
@@ -15,11 +15,11 @@ import org.nms.utils.ResponseUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ProvisionRoutes extends BaseRoutes<JsonObject>
+public class ProvisionEndPoint extends BaseEndPoint<JsonObject>
 {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ProvisionRoutes.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ProvisionEndPoint.class);
 
-    public ProvisionRoutes()
+    public ProvisionEndPoint()
     {
         super(new ProvisionService(),Constants.MONITOR_ID);
     }
@@ -48,21 +48,22 @@ public class ProvisionRoutes extends BaseRoutes<JsonObject>
                                 .put(Constants.DB_QUERY, ProvisionQueries.SELECT_PROVISION_BY_DISCOVERY_ID)
                                 .put(Constants.DB_PARAMS, new JsonArray().add(discoveryId));
 
-                        ((ProvisionService) service)
+                        (service)
                                 .customQueryExecutor(request)
                                 .compose(queryResult ->
                                 {
                                     LOGGER.info("Query result: {}", queryResult);
-                                    var result = queryResult.getJsonObject("data").getJsonObject("result");
+                                    var result = queryResult.getJsonObject("result");
 
-                                    if (result.getInteger("rowCount")!=0)
+                                    if (result.getInteger(Constants.ROW_COUNT)!=0)
                                     {
-                                        if(result.getJsonArray("rows").getJsonObject(0).getBoolean("is_deleted"))
+                                        if(result.getJsonArray(Constants.ROWS).getJsonObject(0).getBoolean("is_deleted"))
                                         {
                                             var softInsert = new JsonObject()
                                                     .put(Constants.DB_QUERY, ProvisionQueries.SOFT_INSERT_PROVISION)
-                                                    .put(Constants.DB_PARAMS, new JsonArray().add(result.getJsonArray("rows").getJsonObject(0).getLong("monitor_id")));
-                                             return ((ProvisionService) service).customQueryExecutor(softInsert);
+                                                    .put(Constants.DB_PARAMS, new JsonArray().add(result.getJsonArray(Constants.ROWS).getJsonObject(0).getLong("monitor_id")));
+
+                                             return (service).customQueryExecutor(softInsert);
                                         }
                                         else
                                         {
@@ -79,23 +80,23 @@ public class ProvisionRoutes extends BaseRoutes<JsonObject>
                                 })
                                 .onComplete(result ->
                                 {
-
                                     if (result.succeeded())
                                     {
                                         context.response()
                                                 .setStatusCode(result.result().getInteger("responseCode", 200))
-                                                .putHeader("content-type", "application/json")
+                                                .putHeader(Constants.CONTENT_TYPE, Constants.CONTENT)
                                                 .end(result.result().encodePrettily());
                                     }
                                     else
                                     {
-                                        ResponseUtil.handleResponse(context, new JsonObject().put("error", result.result()));
+                                        ResponseUtil.handleResponse(context, ApiResponse.error(500, "Failed to create provision: " + result.cause().getMessage()).toJson());
                                     }
                                 });
                     }
                     catch (NumberFormatException exception)
                     {
-                        MiddleWare.respondWithError(context, 400, "Invalid discoveryId format: " + exception.getMessage());
+                        ResponseUtil.handleResponse(context, ApiResponse.error(400, "Invalid discoveryId format:"+ exception.getMessage()).toJson());
+
                     }
                 });
 
@@ -112,25 +113,22 @@ public class ProvisionRoutes extends BaseRoutes<JsonObject>
                                 {
                                     if (result.succeeded())
                                     {
-                                        context.response()
-                                                .setStatusCode(result.result().getInteger("responseCode", 200))
-                                                .putHeader("content-type", "application/json")
-                                                .end(result.result().encodePrettily());
+                                      ResponseUtil.handleResponse(context, ApiResponse.success(result.result()).toJson());
                                     }
                                     else
                                     {
-                                        MiddleWare.respondWithError(context, 500, "Failed to get provisions by status: " + result.cause().getMessage());
+                                        ResponseUtil.handleResponse(context, ApiResponse.error(500, "Failed to get provisions by status:"+ result.cause().getMessage()).toJson());
                                     }
                                 });
                     }
                     catch (Exception exception)
                     {
-                        MiddleWare.respondWithError(context, 400, "Invalid status format: " + exception.getMessage());
+                        ResponseUtil.handleResponse(context, ApiResponse.error(400, "Invalid discoveryId format:"+ exception.getMessage()).toJson());
                     }
                 });
 
         // PUT /:monitorId for updating provision
-        router.put("/:"+Constants.PROVISION_STATUS+"/:" + Constants.MONITOR_ID)
+        router.put("/:"+Constants.STATUS+"/:" + Constants.MONITOR_ID)
                 .handler(context -> MiddleWare.validateContextPath(context, Constants.MONITOR_ID))
                 .handler(context ->
                 {
@@ -152,19 +150,21 @@ public class ProvisionRoutes extends BaseRoutes<JsonObject>
 
                                         context.response()
                                                 .setStatusCode(result.result().getInteger("responseCode", 200))
-                                                .putHeader("content-type", "application/json")
-//                                                .end(ApiResponse.success("Provision updated successfully").toJson().encodePrettily());
+                                                .putHeader(Constants.CONTENT_TYPE, "application/json")
                                                 .end(result.result().encodePrettily());
+
+                                        ResponseUtil.handleResponse(context, ApiResponse.success(result.result()).toJson());
+
                                     }
                                     else
                                     {
-                                        MiddleWare.respondWithError(context, 500, "Failed to update provision: " + result.cause().getMessage());
+                                        ResponseUtil.handleResponse(context, ApiResponse.error(500, "Failed to update provision:"+ result.cause().getMessage()).toJson());
                                     }
                                 });
                     }
                     catch (NumberFormatException exception)
                     {
-                        MiddleWare.respondWithError(context, 400, "Invalid format of path parameter: " + exception.getMessage());
+                        ResponseUtil.handleResponse(context, ApiResponse.error(400, "Invalid format of path parameter"+exception.getMessage()).toJson());
                     }
                 });
     }

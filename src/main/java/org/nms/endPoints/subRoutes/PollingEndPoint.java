@@ -1,18 +1,18 @@
-package org.nms.routerController.subRoutes;
+package org.nms.endPoints.subRoutes;
 
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
-import org.nms.service.BaseService;
 import org.nms.service.PollingService;
+import org.nms.utils.Constants;
 
-public class PollingRoutes extends BaseRoutes<JsonObject>
+public class PollingEndPoint extends BaseEndPoint<JsonObject>
 {
 
     private final PollingService pollingService;
 
-    public PollingRoutes()
+    public PollingEndPoint()
     {
-        super(new PollingService(), "pollingId");
+        super(new PollingService(), Constants.MONITOR_ID);
         this.pollingService = (PollingService) service;
     }
 

@@ -1,4 +1,4 @@
-package org.nms.routerController;
+package org.nms.endPoints;
 
 import io.vertx.core.json.JsonObject;
 

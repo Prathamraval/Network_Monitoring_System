@@ -22,6 +22,7 @@ public class PollingQueries
     // Create a new polling profile
     public static final String INSERT_POLLING_DATA_PROFILE = """
             INSERT INTO Polling_data (monitor_id, data, timestamp) VALUES ($1, $2, $3)
+                RETURNING monitor_id AS id
             """;
 
     // Read a polling profile by ID

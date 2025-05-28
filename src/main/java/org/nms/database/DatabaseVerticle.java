@@ -9,8 +9,6 @@ import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.RowSet;
 import org.nms.database.queries.CredentialQueries;
 import org.nms.database.queries.DiscoveryQueries;
-//import org.nms.database.queries.PollingQueries;
-//import org.nms.database.queries.ProvisionQueries;
 import org.nms.database.queries.PollingQueries;
 import org.nms.database.queries.ProvisionQueries;
 import org.nms.service.DatabaseService;
@@ -19,17 +17,20 @@ import org.nms.utils.DbUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class DatabaseVerticle extends AbstractVerticle {
+public class DatabaseVerticle extends AbstractVerticle
+{
     private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseVerticle.class);
     private DatabaseService dbService;
 
     @Override
-    public void start(Promise<Void> startPromise) {
+    public void start(Promise<Void> startPromise)
+    {
         dbService = DatabaseService.getInstance();
         LOGGER.info("DatabaseVerticle starting...");
 
         init()
-                .compose(v -> {
+                .compose(v ->
+                {
                     setupEventBusConsumers();
                     return Future.succeededFuture();
                 })
@@ -119,7 +120,6 @@ public class DatabaseVerticle extends AbstractVerticle {
                     catch (Exception exception)
                     {
                         LOGGER.error("Error processing column {}: {}", row.getColumnName(i), exception.getMessage());
-                        continue;
                     }
                 }
                 rowsArray.add(jsonRow);
@@ -127,12 +127,11 @@ public class DatabaseVerticle extends AbstractVerticle {
             catch (Exception exception)
             {
                 LOGGER.error("Error processing row: {}", exception.getMessage());
-                continue;
             }
         }
 
-        result.put("rowCount", rows.rowCount());
-        result.put("rows", rowsArray);
+        result.put(Constants.ROW_COUNT, rows.rowCount());
+        result.put(Constants.ROWS, rowsArray);
         return result;
     }
 }

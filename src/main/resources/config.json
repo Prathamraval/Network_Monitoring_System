@@ -1,0 +1,8 @@
+{
+  "go.executable.path": "/plugin-new/plugin-zmq",
+  "database.host": "localhost",
+  "database.port" : 5432,
+  "database.name" : "nms_new",
+  "database.user" : "postgres",
+  "database.password" : "moontomarsis#2"
+}
