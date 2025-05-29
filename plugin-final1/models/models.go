@@ -14,6 +14,7 @@ type DeviceInput struct {
 	Password  string `json:"password"`
 	Protocol  string `json:"protocol"`
 	Status    bool   `json:"status"`
+	WaitTime  int64  `json:"wait_time"` // Wait time in seconds
 }
 
 // BatchInput represents a batch of devices for metrics collection
@@ -81,9 +82,9 @@ type BatchMetricsResult struct {
 
 // DiscoveryResult is used for basic discovery/connectivity checks
 type DiscoveryResult struct {
-	RequestID string    `json:"request_id"`
-	Type      string    `json:"type"`
-// 	MonitorID int       `json:"monitor_id"`
+	RequestID string `json:"request_id"`
+	Type      string `json:"type"`
+	// 	MonitorID int       `json:"monitor_id"`
 	Success   bool      `json:"success"`
 	Details   string    `json:"details"`
 	Timestamp time.Time `json:"timestamp"`

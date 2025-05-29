@@ -4,8 +4,6 @@ import io.vertx.core.Future;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.nms.database.queries.PollingQueries;
-import org.nms.database.queries.ProvisionQueries;
-import org.nms.endPoints.ApiResponse;
 import org.nms.utils.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +36,8 @@ public class PollingService extends BaseService<JsonObject>
 
     public static final HashMap<Long, JsonObject> cache = new HashMap<>();
 
-    public PollingService() {
+    public PollingService()
+    {
         super();
         setupEventBusConsumer();
     }
@@ -160,7 +159,8 @@ public class PollingService extends BaseService<JsonObject>
                 .put(Constants.POLLING_TIMESTAMP, row.getString(Constants.POLLING_TIMESTAMP));
     }
 
-    public Future<JsonObject> getDeviceToMonitor()
+
+    public Future<JsonObject> getDeviceToMonitor(HashMap<Long, String> pendingDevices)
     {
         LOGGER.info("Fetching devices to monitor");
 
@@ -169,48 +169,56 @@ public class PollingService extends BaseService<JsonObject>
 
             cache.forEach((provisionId, provision) ->
             {
-                if (provision.getBoolean(Constants.STATUS, true))
+                try
                 {
-                    var lastPoolStr = provision.getString(Constants.LAST_POOL);
-
-                    if (lastPoolStr != null)
+                    if (provision.getBoolean(Constants.STATUS, true) && !pendingDevices.containsKey(provisionId))
                     {
-                        try
+                        var lastPoolStr = provision.getString(Constants.LAST_POOL);
+
+                        if (lastPoolStr != null)
                         {
-                            OffsetDateTime lastPoolTime;
                             try
                             {
-                                lastPoolTime = OffsetDateTime.parse(lastPoolStr);
-                            }
-                            catch (DateTimeParseException exception)
-                            {
-                                // Fallback to LocalDateTime with IST offset
-                                lastPoolTime = LocalDateTime.parse(lastPoolStr).atZone(ZoneId.of("Asia/Kolkata")).toOffsetDateTime();
-                            }
+                                OffsetDateTime lastPoolTime;
+                                try
+                                {
+                                    lastPoolTime = OffsetDateTime.parse(lastPoolStr);
+                                }
+                                catch (DateTimeParseException exception)
+                                {
+                                    lastPoolTime = LocalDateTime.parse(lastPoolStr).atZone(ZoneId.of("Asia/Kolkata")).toOffsetDateTime();
+                                }
 
-                            var nextPollTime = lastPoolTime.plusMinutes(1);
-                            var currentTime = OffsetDateTime.now();
+                                var nextPollTime = lastPoolTime.plusMinutes(5);
+                                var currentTime = OffsetDateTime.now();
 
-                            if (nextPollTime.isBefore(currentTime))
+                                if (nextPollTime.isBefore(currentTime))
+                                {
+                                    activeProvisions.add(provision);
+                                }
+                            }
+                            catch (Exception exception)
                             {
-                                activeProvisions.add(provision);
+                                LOGGER.error("Failed to parse last_pool time for provision {}: {}", provisionId, exception.getMessage());
                             }
                         }
-                        catch (Exception exception)
+                        else
                         {
-                            LOGGER.error("Failed to parse last_pool time for provision {}: {}", provisionId, exception.getMessage());
+                            activeProvisions.add(provision);
                         }
-                    }
-                    else
-                    {
-                        activeProvisions.add(provision);
                     }
                 }
+                catch (Exception e)
+                {
+                    LOGGER.error("Error processing provision ID {}: {}", provisionId, e.getMessage());
+                }
+
+
             });
 
             return Future.succeededFuture(new JsonObject().put(Constants.PROVISIONS, activeProvisions));
-    }
 
+    }
     public void updateDeviceTimestamp(Long monitorId, String timestamp)
     {
         var provision = cache.get(monitorId);

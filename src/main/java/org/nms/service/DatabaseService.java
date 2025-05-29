@@ -1,5 +1,6 @@
 package org.nms.service;
 
+import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.pgclient.PgConnectOptions;
 import io.vertx.pgclient.PgPool;
@@ -9,7 +10,8 @@ import io.vertx.sqlclient.Tuple;
 import io.vertx.sqlclient.RowSet;
 import io.vertx.core.Future;
 import io.vertx.sqlclient.Row;
-import org.nms.BootStrap;
+import org.nms.Bootstrap;
+import org.nms.utils.ConfigLoader;
 import org.nms.utils.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,15 +21,18 @@ public class DatabaseService
     private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseService.class);
     private static DatabaseService instance;
     private static Pool pool;
+    private static Vertx vertx;
 
-    private DatabaseService() {}
-
+    private DatabaseService()
+    {
+        vertx = Bootstrap.getVertx();
+    }
     public static  DatabaseService getInstance()
     {
         if (instance == null)
         {
             instance = new DatabaseService();
-            connect(BootStrap.getVertx());
+            connect(Bootstrap.getVertx());
         }
         return instance;
     }
@@ -41,11 +46,11 @@ public class DatabaseService
         }
 
         var connectOptions = new PgConnectOptions()
-                .setPort(Constants.DB_PORT)
-                .setHost(Constants.DB_HOST)
-                .setDatabase(Constants.DB_NAME)
-                .setUser(Constants.DB_USER)
-                .setPassword(Constants.DB_PASSWORD);
+                .setPort(ConfigLoader.get().getInteger("database.port"))
+                .setHost(ConfigLoader.get().getString("database.host"))
+                .setDatabase(ConfigLoader.get().getString("database.name"))
+                .setUser(ConfigLoader.get().getString("database.user"))
+                .setPassword(ConfigLoader.get().getString("database.password"));
 
         var poolOptions = new PoolOptions().setMaxSize(5);
         pool = PgPool.pool(vertx, connectOptions, poolOptions);
@@ -54,11 +59,33 @@ public class DatabaseService
 
     public Future<RowSet<Row>> executeQuery(String query)
     {
-        return pool.query(query).execute();
+        return vertx.executeBlocking(promise ->
+        {
+            pool.query(query).execute()
+                    .onSuccess(result ->
+                            promise.complete(result)
+                    )
+                    .onFailure(error ->
+                    {
+                        LOGGER.error("Error executing query: {}", error.getMessage());
+                        promise.fail(error);
+                    });
+        });
     }
-
     public Future<RowSet<Row>> executePreparedQuery(String query, Tuple params)
     {
-        return pool.preparedQuery(query).execute(params);
+        return vertx.executeBlocking(promise ->
+        {
+            pool.preparedQuery(query).execute(params)
+                    .onSuccess(result ->
+                            promise.complete(result)
+                    )
+                    .onFailure(error ->
+                    {
+                        LOGGER.error("Error executing query: {}", error.getMessage());
+                        promise.fail(error);
+                    });
+        });
+
     }
 }

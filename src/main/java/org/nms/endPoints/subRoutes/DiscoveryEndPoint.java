@@ -31,7 +31,7 @@ public class DiscoveryEndPoint extends BaseEndPoint<JsonObject>
                         var discoveryId = Long.parseLong(ctx.pathParam(Constants.DISCOVERY_ID));
                         discoveryService.runDiscovery(discoveryId)
                                 .onSuccess(result -> ResponseUtil.handleResponse(ctx, result))
-                                .onFailure(error -> ResponseUtil.handleResponse(ctx, ApiResponse.error(400, error.getMessage()).toJson()));
+                                .onFailure( error -> ResponseUtil.handleResponse(ctx, ApiResponse.error(400, error.getMessage()).toJson()));
                     }
                     catch (NumberFormatException exception)
                     {

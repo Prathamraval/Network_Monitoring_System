@@ -1,4 +1,4 @@
-module plugin-new
+module plugin-final1
 
 go 1.24.2
 

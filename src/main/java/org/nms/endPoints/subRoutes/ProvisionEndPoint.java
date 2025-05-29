@@ -82,10 +82,7 @@ public class ProvisionEndPoint extends BaseEndPoint<JsonObject>
                                 {
                                     if (result.succeeded())
                                     {
-                                        context.response()
-                                                .setStatusCode(result.result().getInteger("responseCode", 200))
-                                                .putHeader(Constants.CONTENT_TYPE, Constants.CONTENT)
-                                                .end(result.result().encodePrettily());
+                                        ResponseUtil.handleResponse(context, ApiResponse.success(result.result().encodePrettily()).toJson());
                                     }
                                     else
                                     {
@@ -141,20 +138,14 @@ public class ProvisionEndPoint extends BaseEndPoint<JsonObject>
                                 .put(Constants.PROVISION_STATUS,status)
                                 .put(Constants.MONITOR_ID,monitorId);
 
-                        ((ProvisionService)service).update(updateProvision)
+                        (service).update(updateProvision)
                                 .onComplete(result ->
                                 {
                                     if (result.succeeded())
                                     {
                                         LOGGER.info("Provision updated successfully for monitorId: {}", monitorId);
 
-                                        context.response()
-                                                .setStatusCode(result.result().getInteger("responseCode", 200))
-                                                .putHeader(Constants.CONTENT_TYPE, "application/json")
-                                                .end(result.result().encodePrettily());
-
                                         ResponseUtil.handleResponse(context, ApiResponse.success(result.result()).toJson());
-
                                     }
                                     else
                                     {

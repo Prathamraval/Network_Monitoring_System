@@ -6,17 +6,16 @@ import (
 	_ "net/http/pprof"
 	"os"
 
-	"plugin-new/zmq"
+	"plugin-final1/zmq"
 )
 
 func main() {
-
 	go func() {
 		http.ListenAndServe("localhost:6060", nil)
 	}()
 
 	// Set default ZMQ endpoints
-	pullEndpoint := "tcp://*:5555"         // For receiving requests from Vert.x
+	pullEndpoint := "tcp://localhost:5555" // For receiving requests from Vert.x
 	pushEndpoint := "tcp://localhost:5556" // For sending responses to Vert.x
 
 	// Override endpoints if provided
@@ -26,8 +25,7 @@ func main() {
 	}
 
 	// Create and start ZMQ server
-	server, err := zmq.NewServer(pullEndpoint, pushEndpoint)
-
+	server, err := zmq.StartServer(pullEndpoint, pushEndpoint)
 	if err != nil {
 		fmt.Printf("Failed to create ZMQ server: %v\n", err)
 		os.Exit(1)
@@ -38,7 +36,6 @@ func main() {
 	fmt.Printf("Starting device monitor server on %s\n", pullEndpoint)
 
 	err = server.Start()
-
 	if err != nil {
 		fmt.Printf("Failed to start ZMQ server: %v\n", err)
 		os.Exit(1)

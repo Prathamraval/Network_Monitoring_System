@@ -16,7 +16,7 @@ func main() {
 	}()
 
 	// Set default ZMQ endpoints
-	pullEndpoint := "tcp://*:5555"         // For receiving requests from Vert.x
+	pullEndpoint := "tcp://localhost:5555"         // For receiving requests from Vert.x
 	pushEndpoint := "tcp://localhost:5556" // For sending responses to Vert.x
 
 	// Override endpoints if provided

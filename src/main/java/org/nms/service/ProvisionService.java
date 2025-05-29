@@ -99,14 +99,14 @@ public class ProvisionService extends BaseService<JsonObject>
                 .put(Constants.CRED_PASSWORD, row.getString(Constants.CRED_PASSWORD))
                 .put(Constants.CRED_PROTOCOL, row.getString(Constants.CRED_PROTOCOL))
                 .put(Constants.STATUS, row.getBoolean(Constants.PROVISION_STATUS, true))
-                .put(Constants.DISC_WAIT_TIME, row.getString(Constants.DISC_WAIT_TIME));
+                .put(Constants.DISC_WAIT_TIME, row.getInteger(Constants.DISC_WAIT_TIME));
     }
 
     public Future<JsonObject> createProvision(Long discoveryId)
     {
         if (discoveryId == null)
         {
-            return Future.succeededFuture(ApiResponse.error(400, "discoveryId is required").toJson());
+            return Future.failedFuture("discoveryId is required");
         }
 
         var dbRequest = new JsonObject()
@@ -115,7 +115,7 @@ public class ProvisionService extends BaseService<JsonObject>
 
         var promise = Promise.<JsonObject>promise();
 
-        vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_PARAM_EVENTBUS, dbRequest)
+        vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_EVENTBUS, dbRequest)
                 .compose(reply ->
                 {
                     var rows = reply.body();
@@ -123,18 +123,16 @@ public class ProvisionService extends BaseService<JsonObject>
                     {
                         LOGGER.error("Discovery ID {} is not eligible for provisioning", discoveryId);
 
-                        return Future.succeededFuture(ApiResponse.error(404, "No discovery profile found with the given ID").toJson());
+                        return Future.failedFuture( "Discovery ID is not eligible for provisioning");
                     }
 
                     return create(new JsonObject().put(Constants.DISC_ID, discoveryId)).compose(insertReply ->
                     {
-                        LOGGER.info(
-                                "insert reply {}",
-                                insertReply
-                        );
-                        if (!insertReply.getBoolean("success", true))
+                        LOGGER.info("insert reply {}", insertReply);
+
+                        if (!insertReply.getBoolean(Constants.SUCCESS, true))
                         {
-                            return Future.succeededFuture(insertReply);
+                            return Future.failedFuture(insertReply.encodePrettily());
                         }
 
                         var monitorId = insertReply.getValue(Constants.DATA);
@@ -146,7 +144,7 @@ public class ProvisionService extends BaseService<JsonObject>
                             {
                                 vertx.eventBus().publish(EVENT_PROVISION_CHANGED, new JsonObject()
                                         .put(Constants.ACTION, "create")
-                                        .put(PROVISION, result.getJsonObject("entity")));
+                                        .put(PROVISION, result.getJsonObject("entity").put(Constants.LAST_POOL,null)));
                             }
                             catch (Exception exception)
                             {
@@ -163,7 +161,7 @@ public class ProvisionService extends BaseService<JsonObject>
                 {
                     LOGGER.error("Failed to create provision for discoveryId {}: {}", discoveryId, cause.getMessage());
 
-                    promise.complete(ApiResponse.error(500, "Failed to create provision: " + cause.getMessage()).toJson());
+                    promise.fail(cause.getMessage());
                 });
 
         return promise.future();
@@ -178,7 +176,7 @@ public class ProvisionService extends BaseService<JsonObject>
                     .put(Constants.DB_QUERY, ProvisionQueries.SELECT_PROVISIONS_BY_STATUS)
                     .put(Constants.DB_PARAMS, new JsonArray().add(status));
 
-            return vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_PARAM_EVENTBUS, dbRequest)
+            return vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_EVENTBUS, dbRequest)
                     .compose(reply ->
                     {
                         var rows = reply.body();

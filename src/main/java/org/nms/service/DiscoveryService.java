@@ -2,6 +2,7 @@ package org.nms.service;
 
 
 import io.vertx.core.Future;
+import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.Promise;
@@ -35,8 +36,8 @@ public class DiscoveryService extends BaseService<JsonObject>
             Constants.DISC_PORT_NO,
             Constants.STATUS,
             Constants.DISC_LAST_DISCOVERY_TIME,
-            Constants.DISC_MESSAGE,
-            Constants.DISC_ID
+            Constants.MESSAGE,
+            Constants.DISCOVERY_ID
     };
 
     @Override
@@ -72,7 +73,7 @@ public class DiscoveryService extends BaseService<JsonObject>
     @Override
     protected String getIdField()
     {
-        return "discovery_id";
+        return Constants.DISCOVERY_ID;
     }
 
     @Override
@@ -110,6 +111,7 @@ public class DiscoveryService extends BaseService<JsonObject>
                     .put("ipAddress", row.getString(Constants.DISC_IP_ADDRESS))
                     .put("portNo", row.getInteger(Constants.DISC_PORT_NO))
                     .put("status", row.getBoolean(Constants.STATUS))
+                    .put("wait_time", row.getInteger(Constants.DISC_WAIT_TIME))
                     .put(Constants.DISC_LAST_DISCOVERY_TIME, row.getValue(Constants.DISC_LAST_DISCOVERY_TIME))
                     .put("credentials", credentials);
         };
@@ -129,7 +131,7 @@ public class DiscoveryService extends BaseService<JsonObject>
                     .put(Constants.DB_PARAMS, params);
             var promise = Promise.<JsonObject>promise();
 
-            vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_PARAM_EVENTBUS, dbRequest, reply ->
+            vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_EVENTBUS, dbRequest, reply ->
             {
                 try
                 {
@@ -199,7 +201,7 @@ public Future<JsonObject> runDiscovery(Long discoveryId)
         // Return a Future that will be completed when the DB operation is done
         var promise = Promise.<JsonObject>promise();
 
-        vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_PARAM_EVENTBUS, dbRequest, reply ->
+        vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_EVENTBUS, dbRequest, reply ->
         {
             if (reply.succeeded())
             {
@@ -214,7 +216,7 @@ public Future<JsonObject> runDiscovery(Long discoveryId)
 
                     var row = rows.getJsonArray(Constants.ROWS).getJsonObject(0);
                     var discoveryDetails = new JsonObject()
-                            .put(Constants.DISC_ID, row.getLong(Constants.DISC_ID))
+                            .put(Constants.DISCOVERY_ID, row.getLong(Constants.DISC_ID))
                             .put(Constants.DISC_NAME, row.getString(Constants.DISC_NAME))
                             .put(Constants.DISC_IP_ADDRESS, row.getString(Constants.DISC_IP_ADDRESS))
                             .put(Constants.DISC_PORT_NO, row.getInteger(Constants.DISC_PORT_NO))
@@ -240,7 +242,7 @@ public Future<JsonObject> runDiscovery(Long discoveryId)
 
                         discoveryDetails.put(Constants.STATUS, false)
                                 .put(Constants.DISC_LAST_DISCOVERY_TIME, Instant.now().toString())
-                                .put(Constants.DISC_MESSAGE, "Ping check failed: Device is not reachable");
+                                .put(Constants.MESSAGE, "Ping check failed: Device is not reachable");
 
                         update(discoveryDetails);
 
@@ -259,7 +261,7 @@ public Future<JsonObject> runDiscovery(Long discoveryId)
                         LOGGER.error("Port check failed for IP: {}, Port: {}", ipAddress, portNo);
                         discoveryDetails.put(Constants.STATUS, false)
                                 .put(Constants.DISC_LAST_DISCOVERY_TIME, Instant.now().toString())
-                                .put(Constants.DISC_MESSAGE, "Port check failed: Device is not reachable");
+                                .put(Constants.MESSAGE, "Port check failed: Device is not reachable");
 
                         update(discoveryDetails);
 
@@ -271,8 +273,10 @@ public Future<JsonObject> runDiscovery(Long discoveryId)
                     LOGGER.info("Port check successful for IP: {}, Port: {}, Protocol: {}", ipAddress, portNo, protocol);
 
                     blockingPromise.complete();
-                }, result -> {
-                    if (result.failed()) {
+                }, result ->
+                {
+                    if (result.failed())
+                    {
                         LOGGER.error("Failed to perform checks: {}", result.cause().getMessage());
                         promise.complete(ApiResponse.error(400, result.cause().getMessage()).toJson());
                         return;
@@ -294,33 +298,40 @@ public Future<JsonObject> runDiscovery(Long discoveryId)
                             .put(Constants.DATA, new JsonArray().add(deviceInputJson));
 
                     var consumer = vertx.eventBus().<JsonObject>consumer(ZMQCommunication.EB_ZMQ_RESPONSE);
-                    final long timeoutId = vertx.setTimer(30000, id -> {
+
+                    final long timeoutId = vertx.setTimer(30000, id ->
+                    {
                         consumer.unregister();
                         promise.complete(ApiResponse.error(408, "Timeout waiting for discovery response").toJson());
                     });
 
-                    consumer.handler(msg -> {
+                    consumer.handler(msg ->
+                    {
                         var responseBody = msg.body();
                         LOGGER.info("Received ZMQ response: {}", responseBody.encodePrettily());
-                        if (requestId.equals(responseBody.getString("request_id"))) {
+
+                        if (requestId.equals(responseBody.getString(Constants.REQUEST_ID)))
+                        {
                             consumer.unregister();
                             vertx.cancelTimer(timeoutId);
 
-                            var discoverySuccess = responseBody.getBoolean("success", false);
-                            String details = responseBody.getString("details", "");
+                            var discoverySuccess = responseBody.getBoolean(Constants.SUCCESS, false);
+                            var details = responseBody.getString(Constants.DETAILS, "");
 
                             discoveryDetails.put(Constants.STATUS, discoverySuccess)
                                     .put(Constants.DISC_LAST_DISCOVERY_TIME, Instant.now().toString())
-                                    .put(Constants.DISC_MESSAGE, details);
+                                    .put(Constants.MESSAGE, details)
+                                    .put(Constants.DISCOVERY_ID, discoveryId);
 
                             LOGGER.info("Discovery result for ID {}: {}", discoveryId, discoveryDetails);
 
                             update(discoveryDetails)
-                                    .onSuccess(updateResponse -> {
+                                    .onSuccess(updateResponse ->
+                                    {
                                         var response = new JsonObject()
-                                                .put("discoveryId", discoveryId)
-                                                .put("success", discoverySuccess)
-                                                .put("details", details);
+                                                .put(Constants.DISCOVERY_ID, discoveryId)
+                                                .put(Constants.SUCCESS, discoverySuccess)
+                                                .put(Constants.DETAILS, details);
                                         promise.complete(ApiResponse.success(response).toJson());
                                     })
                                     .onFailure(error -> {
@@ -330,16 +341,30 @@ public Future<JsonObject> runDiscovery(Long discoveryId)
                         }
                     });
 
-                    vertx.eventBus().<JsonObject>request(ZMQCommunication.EB_ZMQ_SEND, zmqRequest, zmqSendReply -> {
-                        if (zmqSendReply.failed()) {
+                    vertx.eventBus().<JsonObject>request(ZMQCommunication.EB_ZMQ_SEND, zmqRequest, new DeliveryOptions().setSendTimeout(3000),zmqSendReply ->
+                    {
+                        try
+                        {
+                            if (zmqSendReply.failed())
+                            {
+                                consumer.unregister();
+                                vertx.cancelTimer(timeoutId);
+                                promise.complete(ApiResponse.error(500, "Failed to send discovery request: " +
+                                        zmqSendReply.cause().getMessage()).toJson());
+                            }
+                        }
+                        catch (Exception exception)
+                        {
+                            LOGGER.error("Error in ZMQ send reply: {}", exception.getMessage());
                             consumer.unregister();
                             vertx.cancelTimer(timeoutId);
-                            promise.complete(ApiResponse.error(500, "Failed to send discovery request: " +
-                                    zmqSendReply.cause().getMessage()).toJson());
+                            promise.complete(ApiResponse.error(500, "Error in ZMQ send reply: " + exception.getMessage()).toJson());
                         }
                     });
                 });
-            } else {
+            }
+            else
+            {
                 LOGGER.error("Failed to fetch discovery profile: {}", reply.cause().getMessage());
                 promise.complete(ApiResponse.error(500, reply.cause().getMessage()).toJson());
             }

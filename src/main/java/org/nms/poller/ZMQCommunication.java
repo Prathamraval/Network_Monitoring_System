@@ -1,6 +1,7 @@
 package org.nms.poller;
 
 import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.eventbus.MessageConsumer;
 import io.vertx.core.json.JsonArray;
@@ -21,7 +22,7 @@ public class ZMQCommunication extends AbstractVerticle
 
     private static final Logger logger = LoggerFactory.getLogger(ZMQCommunication.class);
 
-    private static final String PUSH_ENDPOINT = "tcp://localhost:5555";
+    private static final String PUSH_ENDPOINT = "tcp://*:5555";
     private static final String PULL_ENDPOINT = "tcp://*:5556";
     private static final long POLL_INTERVAL_MS = 50; // Poll ZMQ socket every 50ms
 
@@ -125,7 +126,7 @@ public class ZMQCommunication extends AbstractVerticle
                 // Socket to send requests to the Go plugin (PUSH)
                 pushSocket = zmqContext.createSocket(SocketType.PUSH);
                 pushSocket.setSndHWM(1000); // Set high water mark to prevent message loss
-                pushSocket.connect(PUSH_ENDPOINT);
+                pushSocket.bind(PUSH_ENDPOINT);
 
                 // Socket to receive responses from the Go plugin (PULL)
                 pullSocket = zmqContext.createSocket(SocketType.PULL);
@@ -167,10 +168,9 @@ public class ZMQCommunication extends AbstractVerticle
             var requestId = request.getString(Constants.REQUEST_ID);
             var batchSize = request.getJsonArray(Constants.DATA, new JsonArray()).size();
 
-            logger.info("Received request to send via ZMQ: {}, batch size: {}", requestId, batchSize);
 
             // Send the request to the Go plugin
-            sendZmqMessage(request).future().onComplete(ar ->
+            sendZmqMessage(request).onComplete(ar ->
             {
                 if (ar.succeeded())
                 {
@@ -203,39 +203,22 @@ public class ZMQCommunication extends AbstractVerticle
 
     private void listenZmqSocket()
     {
-        vertx.executeBlocking(promise ->
+        try
         {
-            try
+            // Non-blocking poll of the ZMQ socket
+            var responseBytes = pullSocket.recv(ZMQ.DONTWAIT);
+
+            if (responseBytes != null && responseBytes.length > 0)
             {
-                // Non-blocking poll of the ZMQ socket
-                var responseBytes = pullSocket.recv(ZMQ.DONTWAIT);
+                // Process the response on the event loop
+                processResponse(new String(responseBytes));
 
-                if (responseBytes != null && responseBytes.length > 0)
-                {
-                    var responseJson = new String(responseBytes);
-
-                    // Process the response on the event loop
-                    vertx.runOnContext(v -> processResponse(responseJson));
-
-                    promise.complete(true); // Indicate message was received
-                }
-                else
-                {
-                    promise.complete(false); // No message received
-                }
             }
-            catch (Exception exception)
-            {
-                logger.error("Error polling ZMQ socket", exception);
-                promise.fail(exception);
-            }
-        }, false, result ->
+        }
+        catch (Exception exception)
         {
-            if (result.failed())
-            {
-                logger.warn("ZMQ polling failed: {}", result.cause().getMessage());
-            }
-        });
+            logger.error("Error polling ZMQ socket", exception);
+        }
     }
 
     private void processResponse(String responseJson)
@@ -244,19 +227,10 @@ public class ZMQCommunication extends AbstractVerticle
         {
             logger.debug("Processing ZMQ response: {}", responseJson);
 
-            var response = new JsonObject(responseJson);
-            var requestId = response.getString(Constants.REQUEST_ID);
-
-            if (requestId != null)
-            {
                 // Publish the response to the event bus
-                vertx.eventBus().publish(EB_ZMQ_RESPONSE, response);
-                logger.info("Published response for request ID: {} to event bus", requestId);
-            }
-            else
-            {
-                logger.warn("Response has no request_id: {}", responseJson);
-            }
+                vertx.eventBus().publish(EB_ZMQ_RESPONSE, new JsonObject(responseJson));
+                logger.info("Sent response to event bus");
+
         }
         catch (Exception exception)
         {
@@ -264,34 +238,19 @@ public class ZMQCommunication extends AbstractVerticle
         }
     }
 
-    private Promise<Void> sendZmqMessage(JsonObject message)
+    private Future<Void> sendZmqMessage(JsonObject message)
     {
         var promise = Promise.<Void>promise();
-
-        // Execute on a worker thread to avoid blocking the event loop
-        vertx.executeBlocking(p ->
+        try
         {
-            try
-            {
-                pushSocket.send(message.encode().getBytes(), 0); // Use 0 flag for non-blocking
-                p.complete();
-            }
-            catch (Exception exception)
-            {
-                p.fail(exception);
-            }
-        }, false, result ->
+            pushSocket.send(message.encode().getBytes(), 1); // Use 0 flag for non-blocking
+            promise.complete();
+        }
+        catch (Exception exception)
         {
-            if (result.succeeded())
-            {
-                promise.complete();
-            }
-            else
-            {
-                promise.fail(result.cause());
-            }
-        });
+            promise.fail(exception);
+        }
 
-        return promise;
+        return promise.future();
     }
 }

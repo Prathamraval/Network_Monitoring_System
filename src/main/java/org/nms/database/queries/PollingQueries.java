@@ -14,11 +14,6 @@ public class PollingQueries
             );
            """;
 
-//    -- Add index for faster lookups
-//    CREATE INDEX IF NOT EXISTS idx_polling_data_monitor_id ON Polling_data(monitor_id);
-//    CREATE INDEX IF NOT EXISTS idx_polling_data_timestamp ON Polling_data(timestamp);
-
-
     // Create a new polling profile
     public static final String INSERT_POLLING_DATA_PROFILE = """
             INSERT INTO Polling_data (monitor_id, data, timestamp) VALUES ($1, $2, $3)

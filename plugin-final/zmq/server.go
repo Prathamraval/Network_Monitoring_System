@@ -51,7 +51,7 @@ func NewZmqServer(pullEndpoint, pushEndpoint string) (*Server, error) {
 // Start begins listening for messages
 func (s *Server) Start() error {
 	// Bind the PULL socket to receive tasks
-	err := s.pullSocket.Bind(s.pullEndpoint)
+	err := s.pullSocket.Connect(s.pullEndpoint)
 	if err != nil {
 		return fmt.Errorf("failed to bind ZMQ PULL socket: %v", err)
 	}
@@ -70,7 +70,6 @@ func (s *Server) Start() error {
 		message, err := s.pullSocket.RecvBytes(0)
 		if err != nil {
 			fmt.Printf("Error receiving message: %v\n", err)
-			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
@@ -78,6 +77,7 @@ func (s *Server) Start() error {
 
 		// Process the message in a goroutine
 		s.requestsWg.Add(1)
+
 		go func(msg []byte) {
 			defer s.requestsWg.Done()
 			// Process incoming message

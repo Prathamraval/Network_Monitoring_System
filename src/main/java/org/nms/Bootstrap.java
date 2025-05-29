@@ -13,6 +13,7 @@ import org.nms.database.DatabaseVerticle;
 import org.nms.poller.ZMQCommunication;
 import org.nms.poller.PollerEngine;
 import org.nms.service.PollingService;
+import org.nms.utils.ConfigLoader;
 import org.nms.utils.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,30 +23,40 @@ import java.util.ArrayList;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-public class BootStrap
+public class Bootstrap
 {
-    private static final Logger LOGGER = LoggerFactory.getLogger(BootStrap.class);
+    static
+    {
+        ConfigLoader.init(Constants.CONFIG_FILE_PATH);
+    }
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(Bootstrap.class);
+
     private static final Vertx VERTX = Vertx.vertx();
+
     private static Process goProcess;
-    private static final PollingService pollingService = new PollingService(); // Create instance
+
 
     public static Vertx getVertx()
     {
         return VERTX;
     }
 
+    /*
+        * Main entry point for the application.
+        * This method initializes the Vert.x instance, deploys necessary verticles,
+        * starts the Go plugin, and sets up the shutdown hook.
+     */
+
     public static void main(String[] args)
     {
-        // Setup shutdown hook
-        Runtime.getRuntime().addShutdownHook(new Thread(BootStrap::shutdown));
+        Runtime.getRuntime().addShutdownHook(new Thread(Bootstrap::shutdown));
 
-        // Deploy components in sequence
         deployVerticle(new DatabaseVerticle(), Constants.DATABASE)
                 .compose(id -> deployVerticle(new HttpVerticle(), Constants.HTTP))
                 .compose(id -> startGoPlugin())
-                .compose(id -> storeProvisionCache())
                 .compose(id -> deployVerticle(new ZMQCommunication(), Constants.ZMQ))
-                .compose(id -> deployVerticle(new PollerEngine(), Constants.METRICS))
+//                .compose(id -> deployVerticle(new PollerEngine(), Constants.METRICS))
                 .onSuccess(v -> LOGGER.info("Application started successfully"))
                 .onFailure(error ->
                 {
@@ -53,64 +64,6 @@ public class BootStrap
 
                     shutdown();
                 });
-    }
-
-    private static Future<JsonObject> storeProvisionCache()
-    {
-        try
-        {
-            var dbRequest = new JsonObject()
-                    .put(Constants.DB_QUERY, ProvisionQueries.SELECT_ALL_STATUS_TRUE_PROVISIONS);
-
-            return VERTX.eventBus().<JsonObject>request(Constants.DB_EXECUTE_WITHOUT_PARAM_EVENTBUS, dbRequest)
-                    .compose(reply ->
-                    {
-                        var rows = reply.body();
-                        var provisionList = new JsonArray();
-
-                        var rowsArray = rows.getJsonArray(Constants.ROWS, new JsonArray());
-                        for (var i = 0; i < rowsArray.size(); i++)
-                        {
-                            try
-                            {
-                                var row = rowsArray.getJsonObject(i);
-                                var provision = new JsonObject()
-                                        .put(Constants.MONITOR_ID, row.getInteger(Constants.MONITOR_ID))
-                                        .put(Constants.DISC_IP_ADDRESS, row.getString(Constants.DISC_IP_ADDRESS))
-                                        .put(Constants.DISC_PORT_NO, row.getInteger(Constants.DISC_PORT_NO))
-                                        .put(Constants.CRED_USERNAME, row.getString(Constants.CRED_USERNAME))
-                                        .put(Constants.CRED_PASSWORD, row.getString(Constants.CRED_PASSWORD))
-                                        .put(Constants.CRED_PROTOCOL, row.getString(Constants.CRED_PROTOCOL))
-                                        .put(Constants.STATUS, row.getBoolean(Constants.PROVISION_STATUS, true))
-                                        .put(Constants.DISC_WAIT_TIME,row.getInteger(Constants.DISC_WAIT_TIME))
-                                        .put(Constants.LAST_POOL, row.getString(Constants.LAST_POOL));
-
-                                provisionList.add(provision);
-                                pollingService.cache.put(row.getLong(Constants.MONITOR_ID), provision);
-                            }
-                            catch (Exception exception)
-                            {
-                                LOGGER.error("Error processing row {}: {}", i, exception.getMessage());
-                            }
-                        }
-
-                        LOGGER.info("Cached {} devices to monitor", pollingService.cache.size());
-
-                        return Future.succeededFuture(new JsonObject().put("provisions", provisionList));
-                    })
-                    .recover(error ->
-                    {
-                        LOGGER.error("Failed to fetch devices: {}", error.getMessage());
-
-                        return Future.succeededFuture(ApiResponse.error(500, "Failed to fetch devices: " + error.getMessage()).toJson());
-                    });
-
-        }
-        catch (Exception exception)
-        {
-            LOGGER.error("Error in getDeviceToMonitor: {}", exception.getMessage());
-            return Future.succeededFuture(ApiResponse.error(500, "Error fetching devices: " + exception.getMessage()).toJson());
-        }
     }
 
     // Unified method to deploy a Verticle instance
@@ -137,9 +90,9 @@ public class BootStrap
                 try
                 {
                     var killProcess = new ProcessBuilder("pkill", "-f", "plugin-zmq").start();
-                    var exitCode = killProcess.waitFor();
+                    var exitCode = killProcess.waitFor(1, TimeUnit.SECONDS);
 
-                    if (exitCode == 0)
+                    if (exitCode)
                     {
                         LOGGER.info("Killed existing go_plugin if any");
                     }
@@ -155,8 +108,8 @@ public class BootStrap
 
                 // Start new plugin
                 var projectDir = System.getProperty("user.dir");
-                var goPlugin = new File(projectDir + "/plugin-final/plugin-zmq");
 
+                var goPlugin = new File(projectDir + Constants.GO_PLUGIN_PATH);
                 if (!goPlugin.exists() || !goPlugin.canExecute())
                 {
                     LOGGER.error("go_plugin not found or not executable at: {}", goPlugin.getAbsolutePath());
@@ -169,7 +122,6 @@ public class BootStrap
                 // Verify process started successfully
                     try
                     {
-
                         if (goProcess.isAlive())
                         {
                             LOGGER.info("go_plugin started successfully and is running");
@@ -207,7 +159,8 @@ public class BootStrap
             try
             {
                 // Wait up to 5 seconds for the process to terminate
-                var terminated = goProcess.waitFor(5, TimeUnit.SECONDS);
+                var terminated = goProcess.waitFor(1, TimeUnit.SECONDS);
+
                 if (terminated)
                 {
                     LOGGER.info("go_plugin terminated successfully");
@@ -227,7 +180,6 @@ public class BootStrap
 
                 goProcess.destroyForcibly(); // Force termination on interrupt
 
-                LOGGER.info("go_plugin forcibly terminated due to interruption");
             }
         }
         else
@@ -238,37 +190,21 @@ public class BootStrap
         // Undeploy all Verticles
         var deployedVerticleIds = getDeployedVerticleIds();
 
-        var undeployFutures = new ArrayList<Future>();
+        LOGGER.info("Undeploying verticles with IDs: {}", deployedVerticleIds);
+
+        if (deployedVerticleIds.isEmpty())
+        {
+            LOGGER.info("Application shutdown complete");
+
+            VERTX.close().onComplete(v -> LOGGER.info("Vert.x instance closed"));
+
+            return;
+        }
 
         for (var id : deployedVerticleIds)
         {
-            undeployFutures.add(
-                    VERTX.undeploy(id)
-                            .onSuccess(v -> LOGGER.info("Verticle with ID {} undeployed", id))
-                            .onFailure(err -> LOGGER.warn("Failed to undeploy verticle with ID {}: {}", id, err.getMessage()))
-            );
+             VERTX.undeploy(id);
         }
-        if (undeployFutures.isEmpty())
-        {
-            LOGGER.info("No verticles to undeploy");
-        }
-        else
-        {
-            LOGGER.info("Undeploying {} verticles", undeployFutures.size());
-        }
-        // Wait for all Verticles to undeploy
-        CompositeFuture.all(undeployFutures)
-                .onComplete(result ->
-                {
-                    LOGGER.info("All verticles undeployed");
-
-                    // Close Vert.x
-                    VERTX.close()
-                            .onSuccess(v -> LOGGER.info("Vert.x closed successfully"))
-                            .onFailure(error ->
-                                    LOGGER.error("Error closing Vert.x: {}", error.getMessage())
-                            );
-                });
 
         LOGGER.info("Application shutdown complete");
     }

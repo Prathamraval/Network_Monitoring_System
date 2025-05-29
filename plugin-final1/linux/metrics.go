@@ -1,15 +1,13 @@
-package monitor
+package linux
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
-	"plugin-new/models"
-	"plugin-new/ssh"
+	"plugin-final1/models"
+	"plugin-final1/ssh"
 )
 
 // MetricsScript returns a single SSH command to collect all required metrics
@@ -175,7 +173,7 @@ func ParseMetricsOutput(output string, metrics *models.DeviceMetrics) {
 	}
 }
 
-// CollectDeviceMetrics collects metrics from a single device with a 5-second timeout
+// CollectDeviceMetrics collects metrics from a single device with a dynamic timeout
 func CollectDeviceMetrics(device models.DeviceInput) models.DeviceMetrics {
 	metrics := models.DeviceMetrics{
 		MonitorID: device.MonitorID,
@@ -188,8 +186,14 @@ func CollectDeviceMetrics(device models.DeviceInput) models.DeviceMetrics {
 		return metrics
 	}
 
+	// Use wait_time as timeout, default to 5 seconds if invalid
+	waitTimeMs := device.WaitTime * 1000
+	if waitTimeMs <= 0 {
+		waitTimeMs = 5000 // Default to 5 seconds if invalid or not provided
+	}
+
 	client := ssh.NewClient(device)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second) // Aligned with DEVICE_TIMEOUT_MS
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(waitTimeMs)*time.Millisecond)
 	defer cancel()
 
 	output, err := client.RunCommandWithContext(ctx, MetricsScript())
@@ -200,58 +204,4 @@ func CollectDeviceMetrics(device models.DeviceInput) models.DeviceMetrics {
 
 	ParseMetricsOutput(output, &metrics)
 	return metrics
-}
-
-// HandleMetrics processes metrics collection for a batch of devices
-func HandleMetrics(requestID string, input models.BatchInput, sendResponse func(interface{}) error) {
-
-	var wg sync.WaitGroup
-
-	sem := make(chan struct{}, 50)                                   // Limit to 50 goroutines
-
-	responseChan := make(chan models.BatchMetricsResult, len(input)) // Buffered channel for responses
-
-	// Start a goroutine to send responses from the channel
-	var sendWg sync.WaitGroup
-
-	sendWg.Add(1)
-
-	go func() {
-
-		defer sendWg.Done()
-
-		for result := range responseChan {
-
-			if err := sendResponse(result); err != nil {
-				fmt.Printf("Failed to send metrics response for monitor ID %d: %v\n", result.MonitorID, err)
-			}
-		}
-	}()
-
-	for _, device := range input {
-
-		wg.Add(1)
-
-		sem <- struct{}{} // Acquire semaphore
-
-		go func(dev models.DeviceInput) {
-
-			defer wg.Done()
-			defer func() { <-sem }() // Release semaphore
-
-			metrics := CollectDeviceMetrics(dev)
-			result := models.BatchMetricsResult{
-				RequestID: requestID,
-				Type:      "metrics",
-				MonitorID: dev.MonitorID,
-				Metrics:   metrics,
-				Timestamp: time.Now(),
-			}
-			responseChan <- result
-		}(device)
-	}
-
-	wg.Wait()
-	close(responseChan) // Close the response channel after all goroutines are done
-	sendWg.Wait()       // Wait for all responses to be sent
 }

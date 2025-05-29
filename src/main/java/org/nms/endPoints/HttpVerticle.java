@@ -48,4 +48,12 @@ public class HttpVerticle extends AbstractVerticle
                     }
                 });
     }
+
+    @Override
+    public void stop(Promise<Void> stopPromise)
+    {
+        LOGGER.info("Stopping HTTP server...");
+        vertx.close(stopPromise);
+        LOGGER.info("HTTP server stopped.");
+    }
 }

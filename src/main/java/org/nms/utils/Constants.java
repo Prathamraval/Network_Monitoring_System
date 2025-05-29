@@ -1,10 +1,5 @@
 package org.nms.utils;
 
-import org.nms.database.DatabaseVerticle;
-import org.nms.endPoints.HttpVerticle;
-import org.nms.poller.PollerEngine;
-import org.nms.poller.ZMQCommunication;
-
 public class Constants
 {
 
@@ -12,18 +7,11 @@ public class Constants
     public static final String HTTP = "HTTP";
     public static final String ZMQ = "ZMQ";
     public static final String METRICS = "METRICS";
+    public static final String GO_PLUGIN_PATH = "/plugin-final1/plugin-zmq";
 
-
-    // Database configuration
-    public static final int DB_PORT = 5432;
-    public static final String DB_HOST = "localhost";
-    public static final String DB_NAME = "nms_new";
-    public static final String DB_USER = "postgres";
-    public static final String DB_PASSWORD = "moontomarsis#2";
 
     // EventBus addresses
-    public static final String DB_EXECUTE_WITHOUT_PARAM_EVENTBUS = "db.execute.no.params";
-    public static final String DB_EXECUTE_PARAM_EVENTBUS = "db.execute.params";
+    public static final String DB_EXECUTE_EVENTBUS = "db.execute";
     public static final String DB_QUERY = "query";
     public static final String DB_PARAMS = "params";
 
@@ -47,7 +35,7 @@ public class Constants
     public static final String STATUS = "status";
     public static final String DISC_LAST_DISCOVERY_TIME = "lastdiscoverytime";
     public static final String DISC_CREDENTIAL_ID = "credential_id";
-    public static final String DISC_MESSAGE = "message";
+    public static final String MESSAGE = "message";
     public static final String DISC_WAIT_TIME = "wait_time";
 
     // Polling column names
@@ -77,4 +65,7 @@ public class Constants
     public static final String LAST_POOL = "last_pool";
     public static final String ACTION = "action";
 
+    public static final String CONFIG_FILE_PATH = "src/main/resources/config.json";
+    public static final String SUCCESS = "success";
+    public static final String DETAILS = "details";
 }

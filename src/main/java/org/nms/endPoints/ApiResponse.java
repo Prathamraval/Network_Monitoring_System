@@ -1,6 +1,7 @@
 package org.nms.endPoints;
 
 import io.vertx.core.json.JsonObject;
+import org.nms.utils.Constants;
 
 /**
  * Standardized API response format.
@@ -77,17 +78,17 @@ public class ApiResponse
     public JsonObject toJson()
     {
         JsonObject json = new JsonObject()
-                .put("success", success)
+                .put(Constants.SUCCESS, success)
                 .put("statusCode", statusCode);
 
         if (message != null && !message.isEmpty())
         {
-            json.put("message", message);
+            json.put(Constants.MESSAGE, message);
         }
 
         if (data != null && !data.isEmpty())
         {
-            json.put("data", data);
+            json.put(Constants.DATA, data);
         }
 
         return json;
