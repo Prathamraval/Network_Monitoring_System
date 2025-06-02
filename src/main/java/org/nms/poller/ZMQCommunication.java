@@ -6,6 +6,7 @@ import io.vertx.core.Promise;
 import io.vertx.core.eventbus.MessageConsumer;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import org.nms.utils.ConfigLoader;
 import org.nms.utils.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,13 +23,15 @@ public class ZMQCommunication extends AbstractVerticle
 
     private static final Logger logger = LoggerFactory.getLogger(ZMQCommunication.class);
 
-    private static final String PUSH_ENDPOINT = "tcp://*:5555";
-    private static final String PULL_ENDPOINT = "tcp://*:5556";
+    private static final String PUSH_ENDPOINT =  ConfigLoader.get().getString("zmq.push.port");//"tcp://*:5555";
+    private static final String PULL_ENDPOINT = ConfigLoader.get().getString("zmq.pull.port");
+
     private static final long POLL_INTERVAL_MS = 50; // Poll ZMQ socket every 50ms
 
     // Event bus addresses
     public static final String EB_ZMQ_SEND = "zmq.send";
-    public static final String EB_ZMQ_RESPONSE = "zmq.response";
+    public static final String EB_DISCOVERY_ZMQ_RESPONSE = "zmq.discovery.response";
+    public static final String EB_METRICS_ZMQ_RESPONSE = "zmq.metrics.response";
 
     private ZContext zmqContext;
     private ZMQ.Socket pushSocket;
@@ -226,10 +229,17 @@ public class ZMQCommunication extends AbstractVerticle
         try
         {
             logger.debug("Processing ZMQ response: {}", responseJson);
-
+            var body = new JsonObject(responseJson);
                 // Publish the response to the event bus
-                vertx.eventBus().publish(EB_ZMQ_RESPONSE, new JsonObject(responseJson));
+            if(body.getString(Constants.TYPE).equals(Constants.COMMAND_DISCOVERY))
+            {
+                vertx.eventBus().send(EB_DISCOVERY_ZMQ_RESPONSE, body);
                 logger.info("Sent response to event bus");
+            }
+            else
+            {
+                vertx.eventBus().send(EB_METRICS_ZMQ_RESPONSE, body);
+            }
 
         }
         catch (Exception exception)

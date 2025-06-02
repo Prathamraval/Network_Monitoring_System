@@ -84,7 +84,6 @@ type BatchMetricsResult struct {
 type DiscoveryResult struct {
 	RequestID string `json:"request_id"`
 	Type      string `json:"type"`
-	// 	MonitorID int       `json:"monitor_id"`
 	Success   bool      `json:"success"`
 	Details   string    `json:"details"`
 	Timestamp time.Time `json:"timestamp"`

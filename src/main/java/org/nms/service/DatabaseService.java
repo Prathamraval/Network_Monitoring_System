@@ -1,6 +1,5 @@
 package org.nms.service;
 
-import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.pgclient.PgConnectOptions;
 import io.vertx.pgclient.PgPool;
@@ -12,7 +11,6 @@ import io.vertx.core.Future;
 import io.vertx.sqlclient.Row;
 import org.nms.Bootstrap;
 import org.nms.utils.ConfigLoader;
-import org.nms.utils.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

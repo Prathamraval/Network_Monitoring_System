@@ -133,7 +133,7 @@ public class ProvisionQueries
                 monitor_id SERIAL PRIMARY KEY,
                 discovery_id INTEGER UNIQUE NOT NULL,
                 status BOOLEAN DEFAULT TRUE,
-                last_pool VARCHAR(50) DEFAULT NULL,
+                last_poll VARCHAR(50) DEFAULT NULL,
                 is_deleted BOOLEAN DEFAULT FALSE,
                 FOREIGN KEY (discovery_id) REFERENCES discovery_profiles(id)
             );
@@ -212,7 +212,7 @@ public class ProvisionQueries
             SELECT
                 p.monitor_id,
                 p.discovery_id,
-                p.last_pool,
+                p.last_poll,
                 p.status AS provision_status,
                 d.discovery_name,
                 d.ip_address,

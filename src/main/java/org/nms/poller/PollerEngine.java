@@ -25,6 +25,8 @@ public class PollerEngine extends AbstractVerticle
 
     private static final int BATCH_SIZE = 50; // Reduced to match Go plugin
 
+    private static final long BATCH_BUFFER_TIME = 1000; // 1 seconds
+
     private static final long POLLING_CHECK_INTERVAL_MS = 5000; // 5 seconds
 
     private static final ZoneId IST_ZONE = ZoneId.of("Asia/Kolkata");
@@ -76,7 +78,7 @@ public class PollerEngine extends AbstractVerticle
 
     private void setupEventBusConsumer()
     {
-        vertx.eventBus().<JsonObject>consumer(ZMQCommunication.EB_ZMQ_RESPONSE, message ->
+        vertx.eventBus().<JsonObject>localConsumer(ZMQCommunication.EB_METRICS_ZMQ_RESPONSE, message ->
         {
             var response = message.body();
             LOGGER.debug("Response content: {}", response.encodePrettily());
@@ -89,13 +91,17 @@ public class PollerEngine extends AbstractVerticle
         var requestId = response.getString(Constants.REQUEST_ID);
         var monitorId = response.getInteger(Constants.MONITOR_ID);
 
-        if (requestId == null || monitorId == null)
+        LOGGER.info("Processing response for request_id: {}, monitor_id: {}", requestId, monitorId);
+
+        if (requestId.isEmpty() || monitorId == null)
         {
             LOGGER.warn("Invalid response: request_id or monitor_id missing");
             return;
         }
 
         respondedDevices.computeIfAbsent(requestId, k -> ConcurrentHashMap.newKeySet()).add(monitorId.longValue());
+
+        LOGGER.info("Responded devices-------- {}", respondedDevices.get(requestId));
 
         var timestamp = response.getString(Constants.POLLING_TIMESTAMP, OffsetDateTime.now(IST_ZONE).toString());
 
@@ -133,6 +139,7 @@ public class PollerEngine extends AbstractVerticle
 
         if (responded.size() < batch.size())
         {
+            LOGGER.warn("Not all devices responded for batch ID: {}. Expected: {}, Responded: {} ,responded deivce :{}", requestId, batch.size(), responded.size(), responded);
             for (var i = 0; i < batch.size(); i++)
             {
                 var device = batch.getJsonObject(i);
@@ -207,10 +214,9 @@ public class PollerEngine extends AbstractVerticle
         try
         {
             var totalDevices = provisions.size();
-            LOGGER.info("Processing {} devices in batches of {}", totalDevices, BATCH_SIZE);
 
-            var batchPromises = new ArrayList<Future<Object>>();
-            long previousAvgWaitTimeMs = lastBatchId != null ? batchAvgWaitTimes.getOrDefault(lastBatchId, 0L) : 0L;
+            LOGGER.info("Last batch ID: {}", lastBatchId);
+
 
             for (var start = 0; start < totalDevices; start += BATCH_SIZE)
             {
@@ -218,6 +224,7 @@ public class PollerEngine extends AbstractVerticle
                 var end = Math.min(start + BATCH_SIZE, totalDevices);
                 long maxWaitTimeMs = 0;
                 long sumWaitTimeMs = 0;
+                long previousAvgWaitTimeMs = lastBatchId != null ? batchAvgWaitTimes.get(lastBatchId) : 0L;
 
                 for (var i = start; i < end; i++)
                 {
@@ -245,14 +252,15 @@ public class PollerEngine extends AbstractVerticle
                 }
 
                 long avgWaitTimeMs = batch.size() > 0 ? sumWaitTimeMs / batch.size() : 0;
-                long batchTimeoutMs = (start == 0 ? maxWaitTimeMs : previousAvgWaitTimeMs + maxWaitTimeMs);
+                long batchTimeoutMs = (start == 0 ? maxWaitTimeMs : (previousAvgWaitTimeMs + maxWaitTimeMs))+BATCH_BUFFER_TIME ;
 
+                LOGGER.info("Batch {}: size={}, avgWaitTimeMs={}, batchTimeoutMs={} previousAvgWaitTimeMs= {}", start / BATCH_SIZE, batch.size(), avgWaitTimeMs, batchTimeoutMs, previousAvgWaitTimeMs);
                 var requestId = UUID.randomUUID().toString();
 
-                batchAvgWaitTimes.put(requestId, avgWaitTimeMs);
+                batchAvgWaitTimes.put(requestId, previousAvgWaitTimeMs + avgWaitTimeMs);
                 lastBatchId = requestId;
 
-                batchPromises.add(sendMetricsRequest(batch, requestId, batchTimeoutMs));
+                sendMetricsRequest(batch, requestId, batchTimeoutMs);
             }
 
             scheduleNextCollection();
@@ -266,7 +274,7 @@ public class PollerEngine extends AbstractVerticle
 
     }
 
-    private Future<Object> sendMetricsRequest(JsonArray batch, String requestId, long batchTimeoutMs)
+    private void sendMetricsRequest(JsonArray batch, String requestId, long batchTimeoutMs)
     {
         var request = new JsonObject()
                 .put(Constants.REQUEST_ID, requestId)
@@ -295,20 +303,7 @@ public class PollerEngine extends AbstractVerticle
         });
         batchTimerIds.put(requestId, timerId);
 
-        return vertx.eventBus().<JsonObject>request(ZMQCommunication.EB_ZMQ_SEND, request)
-                .compose(reply -> {
-                    LOGGER.info("ZMQ request sent successfully with ID: {}", requestId);
-
-                    return Future.succeededFuture();
-                })
-                .recover(error ->
-                {
-                    LOGGER.error("Failed to send ZMQ request: {}", error.getMessage());
-
-                    completeBatch(requestId, batch, batchStartTimeMs);
-
-                    return Future.succeededFuture();
-                });
+         vertx.eventBus().<JsonObject>send(ZMQCommunication.EB_ZMQ_SEND, request);
     }
 
     private void scheduleNextCollection()
@@ -341,7 +336,8 @@ public class PollerEngine extends AbstractVerticle
         storePollingData(monitorId, metrics);
     }
 
-    private void storePollingData(Integer monitorId, JsonObject deviceMetrics) {
+    private void storePollingData(Integer monitorId, JsonObject deviceMetrics)
+    {
         var timestampStr = deviceMetrics.getString(Constants.POLLING_TIMESTAMP);
 
         if (timestampStr == null) {

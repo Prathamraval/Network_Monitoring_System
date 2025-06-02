@@ -56,8 +56,8 @@ public class DatabaseVerticle extends AbstractVerticle
 
         return promise.future();
     }
-
     private void storeProvisionCache()
+
     {
         try
         {
@@ -82,7 +82,7 @@ public class DatabaseVerticle extends AbstractVerticle
                                         .put(Constants.CRED_PROTOCOL, row.getString(Constants.CRED_PROTOCOL))
                                         .put(Constants.STATUS, row.getBoolean(Constants.PROVISION_STATUS, true))
                                         .put(Constants.DISC_WAIT_TIME,row.getInteger(Constants.DISC_WAIT_TIME))
-                                        .put(Constants.LAST_POOL, row.getString(Constants.LAST_POOL));
+                                        .put(Constants.LAST_POLL, row.getString(Constants.LAST_POLL));
 
                                 provisionList.add(provision);
                                 PollingService.cache.put(row.getLong(Constants.MONITOR_ID), provision);

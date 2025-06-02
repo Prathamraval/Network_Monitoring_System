@@ -82,7 +82,7 @@ public class ProvisionEndPoint extends BaseEndPoint<JsonObject>
                                 {
                                     if (result.succeeded())
                                     {
-                                        ResponseUtil.handleResponse(context, ApiResponse.success(result.result().encodePrettily()).toJson());
+                                        ResponseUtil.handleResponse(context, ApiResponse.success(result.result()).toJson());
                                     }
                                     else
                                     {
@@ -125,7 +125,7 @@ public class ProvisionEndPoint extends BaseEndPoint<JsonObject>
                 });
 
         // PUT /:monitorId for updating provision
-        router.put("/:"+Constants.STATUS+"/:" + Constants.MONITOR_ID)
+        router.put("/:"+Constants.PROVISION_STATUS+"/:" + Constants.MONITOR_ID)
                 .handler(context -> MiddleWare.validateContextPath(context, Constants.MONITOR_ID))
                 .handler(context ->
                 {
@@ -137,8 +137,8 @@ public class ProvisionEndPoint extends BaseEndPoint<JsonObject>
                         var updateProvision = new JsonObject()
                                 .put(Constants.PROVISION_STATUS,status)
                                 .put(Constants.MONITOR_ID,monitorId);
-
-                        (service).update(updateProvision)
+                        LOGGER.info("updateProvision: {}", updateProvision);
+                        service.update(updateProvision)
                                 .onComplete(result ->
                                 {
                                     if (result.succeeded())

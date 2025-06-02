@@ -10,9 +10,9 @@ import org.nms.endPoints.subRoutes.ProvisionEndPoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class HttpVerticle extends AbstractVerticle
+public class Server extends AbstractVerticle
 {
-    private static final Logger LOGGER = LoggerFactory.getLogger(HttpVerticle.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Server.class);
     private static final int PORT = 8080;
 
     private static final String CREDENTIAL_PATH = "/api/v1/credential";
@@ -20,18 +20,18 @@ public class HttpVerticle extends AbstractVerticle
     private static final String POLLING_PATH = "/api/v1/polling";
     private static final String PROVISION_PATH = "/api/v1/provision";
 
-
     @Override
     public void start(Promise<Void> startPromise)
     {
         var router = Router.router(vertx);
 
-        // Mount sub-routers
+        // Mount REST sub-routes
         router.mountSubRouter(CREDENTIAL_PATH, new CredentialEndPoint().createRouter(vertx));
         router.mountSubRouter(DISCOVERY_PATH, new DiscoveryEndPoint().createRouter(vertx));
         router.mountSubRouter(POLLING_PATH, new PollingEndPoint().createRouter(vertx));
         router.mountSubRouter(PROVISION_PATH, new ProvisionEndPoint().createRouter(vertx));
 
+        // Start HTTP server
         vertx.createHttpServer()
                 .requestHandler(router)
                 .listen(PORT, result ->
@@ -43,8 +43,8 @@ public class HttpVerticle extends AbstractVerticle
                     }
                     else
                     {
+                        LOGGER.error("Failed to start HTTP server", result.cause());
                         startPromise.fail(result.cause());
-                        LOGGER.error("Failed to start HTTP server: {}", result.cause().getMessage());
                     }
                 });
     }

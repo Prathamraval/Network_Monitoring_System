@@ -46,10 +46,13 @@ public class Constants
     // Provision column names
     public static final String DISCOVERY_ID = "discoveryId";
     public static final String PROVISION_STATUS = "provision_status";
+    public static final String EVENT_PROVISION_CHANGED = "provision.changed";
+
 
     public static final String REQUEST_ID = "request_id";
     public static final String COMMAND = "command";
     public static final String COMMAND_METRICS ="metrics";
+    public static final String COMMAND_DISCOVERY = "discovery";
 
     public static final String DATA = "data";
     public static final String ERROR = "error";
@@ -62,10 +65,13 @@ public class Constants
     public static final String CONTENT = "application/json";
     public static final String TYPE ="type";
     public static final String PROVISIONS = "provisions";
-    public static final String LAST_POOL = "last_pool";
+    public static final String LAST_POLL = "last_poll";
     public static final String ACTION = "action";
 
-    public static final String CONFIG_FILE_PATH = "src/main/resources/config.json";
+    public static final String CONFIG_FILE_PATH = "/home/pratham/Desktop/NMS-generic/NMS new/src/main/java/org/nms/config/config.json";
     public static final String SUCCESS = "success";
     public static final String DETAILS = "details";
+    public static final String ENTITY = "entity";
+    public static final String REPLY_ADDRESS = "replyaddress";
+    public static final String RESULT = "result";
 }

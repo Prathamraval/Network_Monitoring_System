@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 
 public abstract class BaseEndPoint<T>
 {
-    private static final Logger LOGGER = LoggerFactory.getLogger(BaseEndPoint.class);
     protected final BaseService<T> service;
     protected final String idPath;
     protected final String idField;
@@ -33,17 +32,18 @@ public abstract class BaseEndPoint<T>
 
         router.post("/")
                 .handler(MiddleWare::validateRequestBody)
-                .handler(ctx ->
+                .handler(context ->
                 {
-                    service.create(ctx.getBodyAsJson())
+                    service.create(context.getBodyAsJson())
                             .onSuccess(result ->
                             {
-                                ResponseUtil.handleResponse(ctx, ApiResponse.success(result).toJson());
+                                ResponseUtil.handleResponse(context, ApiResponse.success(result).toJson());
                             })
                             .onFailure(error ->
                             {
-                                int statusCode = 500;
-                                String message = error.getMessage();
+                                var statusCode = 500;
+                                var message = error.getMessage();
+
                                 if (message.equals("Failed to insert entity"))
                                 {
                                     statusCode = 500;
@@ -55,8 +55,9 @@ public abstract class BaseEndPoint<T>
                                 else if (message.equals("Foreign key violation error."))
                                 {
                                     statusCode = 400;
+                                    ResponseUtil.handleResponse(context, ApiResponse.error(statusCode, "Foreign key doesn't exist.").toJson());
                                 }
-                                ResponseUtil.handleResponse(ctx, ApiResponse.error(statusCode, message).toJson());
+                                ResponseUtil.handleResponse(context, ApiResponse.error(statusCode, message).toJson());
                             });
                 });
 
@@ -70,8 +71,9 @@ public abstract class BaseEndPoint<T>
                             })
                             .onFailure(error ->
                             {
-                                int statusCode = 500;
-                                String message = error.getMessage();
+                                var statusCode = 500;
+                                var message = error.getMessage();
+
                                 if (message.equals("No entities found"))
                                 {
                                     statusCode = 404;
@@ -126,8 +128,9 @@ public abstract class BaseEndPoint<T>
                                 })
                                 .onFailure(error ->
                                 {
-                                    int statusCode = 500;
-                                    String message = error.getMessage();
+                                    var statusCode = 500;
+                                    var message = error.getMessage();
+
                                     if (message.equals("Failed to update entity"))
                                     {
                                         statusCode = 500;
@@ -143,6 +146,7 @@ public abstract class BaseEndPoint<T>
                                     else if (message.equals("Foreign key violation error."))
                                     {
                                         statusCode = 400;
+                                        ResponseUtil.handleResponse(ctx, ApiResponse.error(statusCode, "Foreign key does not exist.").toJson());
                                     }
                                     ResponseUtil.handleResponse(ctx, ApiResponse.error(statusCode, message).toJson());
                                 });
@@ -168,13 +172,19 @@ public abstract class BaseEndPoint<T>
                                 })
                                 .onFailure(error ->
                                 {
-                                    int statusCode = 500;
-                                    String message = error.getMessage();
+                                    var statusCode = 500;
+                                    var message = error.getMessage();
                                     if (message.startsWith("No entity found with ID: "))
                                     {
                                         statusCode = 404;
                                     }
-                                    ResponseUtil.handleResponse(ctx, ApiResponse.error(statusCode, message).toJson());
+                                    else if (message.equals("Foreign key violation error."))
+                                    {
+                                        statusCode = 400;
+                                        ResponseUtil.handleResponse(ctx, ApiResponse.error(statusCode, "Entity is already in use in other table .").toJson());
+                                    }
+                                        ResponseUtil.handleResponse(ctx, ApiResponse.error(statusCode, message).toJson());
+
                                 });
                     }
                     catch (NumberFormatException exception)

@@ -3,23 +3,17 @@ package org.nms;
 import io.vertx.core.Future;
 import io.vertx.core.Verticle;
 import io.vertx.core.Vertx;
-import io.vertx.core.CompositeFuture;
-import io.vertx.core.json.JsonArray;
-import io.vertx.core.json.JsonObject;
-import org.nms.database.queries.ProvisionQueries;
-import org.nms.endPoints.ApiResponse;
-import org.nms.endPoints.HttpVerticle;
+import org.nms.endPoints.DiscoveryVerticle;
+import org.nms.endPoints.Server;
 import org.nms.database.DatabaseVerticle;
 import org.nms.poller.ZMQCommunication;
 import org.nms.poller.PollerEngine;
-import org.nms.service.PollingService;
 import org.nms.utils.ConfigLoader;
 import org.nms.utils.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -53,9 +47,10 @@ public class Bootstrap
         Runtime.getRuntime().addShutdownHook(new Thread(Bootstrap::shutdown));
 
         deployVerticle(new DatabaseVerticle(), Constants.DATABASE)
-                .compose(id -> deployVerticle(new HttpVerticle(), Constants.HTTP))
+                .compose(id -> deployVerticle(new Server(), Constants.HTTP))
                 .compose(id -> startGoPlugin())
                 .compose(id -> deployVerticle(new ZMQCommunication(), Constants.ZMQ))
+                .compose(id -> deployVerticle(new DiscoveryVerticle(), Constants.ZMQ))
 //                .compose(id -> deployVerticle(new PollerEngine(), Constants.METRICS))
                 .onSuccess(v -> LOGGER.info("Application started successfully"))
                 .onFailure(error ->
@@ -107,9 +102,8 @@ public class Bootstrap
                 }
 
                 // Start new plugin
-                var projectDir = System.getProperty("user.dir");
+                var goPlugin = new File(ConfigLoader.get().getString("plugin.path"));
 
-                var goPlugin = new File(projectDir + Constants.GO_PLUGIN_PATH);
                 if (!goPlugin.exists() || !goPlugin.canExecute())
                 {
                     LOGGER.error("go_plugin not found or not executable at: {}", goPlugin.getAbsolutePath());

@@ -12,6 +12,11 @@ import (
 	"github.com/pebbe/zmq4"
 )
 
+type MetricsTask struct {
+	Device    models.DeviceInput
+	RequestID string
+}
+
 // Server handles ZeroMQ communication with PUSH/PULL pattern
 type Server struct {
 	pullSocket    *zmq4.Socket
@@ -19,12 +24,12 @@ type Server struct {
 	pullEndpoint  string
 	pushEndpoint  string
 	requestsWg    sync.WaitGroup
-	metricsChan   chan models.DeviceInput // Channel for metrics devices
+	metricsChan   chan MetricsTask        // Channel for metrics devices
 	discoveryChan chan models.DeviceInput // Channel for discovery devices
 	responseChan  chan interface{}        // Channel for all responses
 }
 
-// NewZmqServer creates a new ZMQ server
+// StartServer creates a new ZMQ server
 func StartServer(pullEndpoint, pushEndpoint string) (*Server, error) {
 
 	// Create a socket to receive tasks (PULL)
@@ -50,9 +55,9 @@ func StartServer(pullEndpoint, pushEndpoint string) (*Server, error) {
 		pushSocket:    pushSocket,
 		pullEndpoint:  pullEndpoint,
 		pushEndpoint:  pushEndpoint,
-		metricsChan:   make(chan models.DeviceInput, 1000), // Buffered for 1000 devices
-		discoveryChan: make(chan models.DeviceInput, 100),  // Buffered for 100 discovery requests
-		responseChan:  make(chan interface{}, 1000),        // Buffered for 1000 responses
+		metricsChan:   make(chan MetricsTask, 1000),       // Buffered for 1000 devices
+		discoveryChan: make(chan models.DeviceInput, 100), // Buffered for 100 discovery requests
+		responseChan:  make(chan interface{}, 1000),       // Buffered for 1000 responses
 	}
 
 	// Start response-sending goroutine
@@ -102,7 +107,7 @@ func (s *Server) Start() error {
 		if err := json.Unmarshal(message, &request); err != nil {
 			fmt.Printf("Failed to parse request: %v\n", err)
 			s.responseChan <- map[string]interface{}{
-				"request_id": "",
+				"request_id": request.RequestID,
 				"type":       "error",
 				"details":    fmt.Sprintf("Failed to parse request: %v", err),
 				"timestamp":  time.Now(),
@@ -129,7 +134,10 @@ func (s *Server) Start() error {
 		switch request.Command {
 		case "metrics":
 			for _, device := range input {
-				s.metricsChan <- device
+				s.metricsChan <- MetricsTask{
+					Device:    device,
+					RequestID: request.RequestID,
+				}
 			}
 		case "discovery":
 			for _, device := range input {
@@ -167,14 +175,14 @@ func (s *Server) Close() {
 // processMetrics runs in 50 fixed goroutines to handle metrics requests
 func (s *Server) processMetrics() {
 
-	for device := range s.metricsChan {
+	for task := range s.metricsChan {
 
-		metrics := linux.CollectDeviceMetrics(device)
+		metrics := linux.CollectDeviceMetrics(task.Device)
 
 		result := models.BatchMetricsResult{
-			RequestID: "", // RequestID set by sender
+			RequestID: task.RequestID, // RequestID set by sender
 			Type:      "metrics",
-			MonitorID: device.MonitorID,
+			MonitorID: task.Device.MonitorID,
 			Metrics:   metrics,
 			Timestamp: time.Now(),
 		}
@@ -213,13 +221,18 @@ func (s *Server) sendResponses() {
 
 		// Send with retries
 		for retries := 3; retries > 0; retries-- {
+
 			_, err = s.pushSocket.SendBytes(jsonData, 0)
+
 			if err == nil {
 				break
 			}
+
 			fmt.Printf("Failed to send response, retrying (%d retries left): %v\n", retries-1, err)
+
 			time.Sleep(100 * time.Millisecond)
 		}
+
 		if err != nil {
 			fmt.Printf("Failed to send response after retries: %v\n", err)
 		}

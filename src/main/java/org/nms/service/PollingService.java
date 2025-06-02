@@ -20,7 +20,6 @@ public class PollingService extends BaseService<JsonObject>
     private static final Logger LOGGER = LoggerFactory.getLogger(PollingService.class);
 
     public static final String MONITORID = "monitorId";
-    private static final String EVENT_PROVISION_CHANGED = "provision.changed";
 
     public static final String[] CREATE_PARAM_MAPPING = {
             Constants.MONITOR_ID,
@@ -44,7 +43,7 @@ public class PollingService extends BaseService<JsonObject>
 
     private void setupEventBusConsumer()
     {
-        vertx.eventBus().<JsonObject>consumer(EVENT_PROVISION_CHANGED, message ->
+        vertx.eventBus().<JsonObject>consumer(Constants.EVENT_PROVISION_CHANGED, message ->
         {
             var event = message.body();
             var action = event.getString(Constants.ACTION);
@@ -62,22 +61,22 @@ public class PollingService extends BaseService<JsonObject>
                 case "create":
                     // Add provision to cache with last_pool
                     cache.put(monitorId, provision);
-                    LOGGER.info("Added provision {} to cache with last_pool: {}", provision, provision.getString("last_pool"));
+                    LOGGER.info("Added provision {} to cache with last_poll: {}", provision, provision.getString(Constants.LAST_POLL));
                     break;
 
                 case "update":
-                    // Update provision in cache, preserving last_pool unless provided
+                    // Update provision in cache, preserving last_poll unless provided
                     var existingProvision = cache.get(monitorId);
                     if (existingProvision != null)
                     {
                         var updatedProvision = existingProvision.copy();
                         updatedProvision.put(Constants.STATUS, provision.getBoolean(Constants.PROVISION_STATUS, true));
-                        if (provision.containsKey(Constants.LAST_POOL))
+                        if (provision.containsKey(Constants.LAST_POLL))
                         {
-                            updatedProvision.put(Constants.LAST_POOL, provision.getString(Constants.LAST_POOL));
+                            updatedProvision.put(Constants.LAST_POLL, provision.getString(Constants.LAST_POLL));
                         }
                         cache.put(monitorId, updatedProvision);
-                        LOGGER.info("Updated provision {} in cache, last_pool: {}", monitorId, updatedProvision.getString("last_pool"));
+                        LOGGER.info("Updated provision {} in cache, last_poll: {}", monitorId, updatedProvision.getString(Constants.LAST_POLL));
                     }
                     break;
 
@@ -173,7 +172,7 @@ public class PollingService extends BaseService<JsonObject>
                 {
                     if (provision.getBoolean(Constants.STATUS, true) && !pendingDevices.containsKey(provisionId))
                     {
-                        var lastPoolStr = provision.getString(Constants.LAST_POOL);
+                        var lastPoolStr = provision.getString(Constants.LAST_POLL);
 
                         if (lastPoolStr != null)
                         {
@@ -199,7 +198,7 @@ public class PollingService extends BaseService<JsonObject>
                             }
                             catch (Exception exception)
                             {
-                                LOGGER.error("Failed to parse last_pool time for provision {}: {}", provisionId, exception.getMessage());
+                                LOGGER.error("Failed to parse last_poll time for provision {}: {}", provisionId, exception.getMessage());
                             }
                         }
                         else
@@ -225,9 +224,9 @@ public class PollingService extends BaseService<JsonObject>
 
         if (provision != null)
         {
-            cache.put(monitorId, provision.put(Constants.LAST_POOL, timestamp));
+            cache.put(monitorId, provision.put(Constants.LAST_POLL, timestamp));
 
-            LOGGER.info("Updated last_pool for monitor ID {} to {}", monitorId, timestamp);
+            LOGGER.info("Updated last_poll for monitor ID {} to {}", monitorId, timestamp);
         }
     }
 
