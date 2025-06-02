@@ -30,7 +30,6 @@ public class Bootstrap
 
     private static Process goProcess;
 
-
     public static Vertx getVertx()
     {
         return VERTX;
