@@ -51,7 +51,7 @@ public class Bootstrap
                 .compose(id -> startGoPlugin())
                 .compose(id -> deployVerticle(new ZMQCommunication(), Constants.ZMQ))
                 .compose(id -> deployVerticle(new DiscoveryVerticle(), Constants.ZMQ))
-//                .compose(id -> deployVerticle(new PollerEngine(), Constants.METRICS))
+                .compose(id -> deployVerticle(new PollerEngine(), Constants.METRICS))
                 .onSuccess(v -> LOGGER.info("Application started successfully"))
                 .onFailure(error ->
                 {

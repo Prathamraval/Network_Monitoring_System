@@ -37,7 +37,7 @@ public class PollerEngine extends AbstractVerticle
 
     private final HashMap<String, JsonArray> pendingRequests = new HashMap<>();
 
-    private final HashMap<String, Set<Long>> respondedDevices = new HashMap<>();
+    private final HashMap<String, List<Long>> respondedDevices = new HashMap<>();
 
     private final HashMap<String, Long> batchAvgWaitTimes = new HashMap<>();
 
@@ -99,7 +99,7 @@ public class PollerEngine extends AbstractVerticle
             return;
         }
 
-        respondedDevices.computeIfAbsent(requestId, k -> ConcurrentHashMap.newKeySet()).add(monitorId.longValue());
+        respondedDevices.computeIfAbsent(requestId, k -> new ArrayList<>()).add(monitorId.longValue());
 
         LOGGER.info("Responded devices-------- {}", respondedDevices.get(requestId));
 

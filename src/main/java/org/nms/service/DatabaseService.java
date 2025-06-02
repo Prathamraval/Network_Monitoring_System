@@ -60,9 +60,7 @@ public class DatabaseService
         return vertx.executeBlocking(promise ->
         {
             pool.query(query).execute()
-                    .onSuccess(result ->
-                            promise.complete(result)
-                    )
+                    .onSuccess(promise::complete)
                     .onFailure(error ->
                     {
                         LOGGER.error("Error executing query: {}", error.getMessage());
@@ -75,9 +73,7 @@ public class DatabaseService
         return vertx.executeBlocking(promise ->
         {
             pool.preparedQuery(query).execute(params)
-                    .onSuccess(result ->
-                            promise.complete(result)
-                    )
+                    .onSuccess(promise::complete)
                     .onFailure(error ->
                     {
                         LOGGER.error("Error executing query: {}", error.getMessage());

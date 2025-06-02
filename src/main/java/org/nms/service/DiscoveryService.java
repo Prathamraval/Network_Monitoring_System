@@ -5,14 +5,11 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.Promise;
 import org.nms.database.queries.DiscoveryQueries;
-import org.nms.poller.ZMQCommunication;
 import org.nms.endPoints.ApiResponse;
 import org.nms.utils.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 public class DiscoveryService extends BaseService<JsonObject>
@@ -240,8 +237,7 @@ public class DiscoveryService extends BaseService<JsonObject>
             });
 
             // Send discoveryId to DiscoveryVerticle with reply address
-            requestBody
-                    .put(Constants.REPLY_ADDRESS, replyAddress);
+            requestBody.put(Constants.REPLY_ADDRESS, replyAddress);
 
             vertx.eventBus().send("discovery.run", requestBody);
 
@@ -256,17 +252,6 @@ public class DiscoveryService extends BaseService<JsonObject>
         {
             LOGGER.error("Error in runDiscovery: {}", exception.getMessage());
             return Future.succeededFuture(ApiResponse.error(500, exception.getMessage()).toJson());
-        }
-    }
-
-    private static class ResponseHandler
-    {
-        final Promise<JsonObject> promise;
-        final long timeoutId;
-        ResponseHandler(Promise<JsonObject> promise, long timeoutId)
-        {
-            this.promise = promise;
-            this.timeoutId = timeoutId;
         }
     }
 }

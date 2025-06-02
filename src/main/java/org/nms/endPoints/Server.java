@@ -7,13 +7,14 @@ import org.nms.endPoints.subRoutes.CredentialEndPoint;
 import org.nms.endPoints.subRoutes.DiscoveryEndPoint;
 import org.nms.endPoints.subRoutes.PollingEndPoint;
 import org.nms.endPoints.subRoutes.ProvisionEndPoint;
+import org.nms.utils.ConfigLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Server extends AbstractVerticle
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(Server.class);
-    private static final int PORT = 8080;
+    private static final int PORT = ConfigLoader.get().getInteger("server.port");
 
     private static final String CREDENTIAL_PATH = "/api/v1/credential";
     private static final String DISCOVERY_PATH = "/api/v1/discovery";
