@@ -21,37 +21,16 @@ public class DiscoveryEndPoint extends BaseEndPoint<JsonObject>
     private static final String DISCOVERY_STATUS_PATH = "/status/:status";
     private static final String DISCOVERY_STATUS = "status";
     private final DiscoveryService discoveryService;
-    private final Vertx vertx;
     public DiscoveryEndPoint()
     {
         super(new DiscoveryService(), Constants.DISCOVERY_ID);
         this.discoveryService = (DiscoveryService) service;
-        this.vertx = Bootstrap.getVertx();
 
     }
 
     @Override
     protected void configureAdditionalRoutes(Router router)
     {
-//        router.post(RUN_DISCOVERY_PATH)
-//                .handler(ctx ->
-//                {
-//                    try
-//                    {
-//                        var discoveryId = Long.parseLong(ctx.pathParam(Constants.DISCOVERY_ID));
-//
-//                        discoveryService.processRunDiscovery(discoveryId)
-//                                .onSuccess(result -> {
-//                                    LOGGER.info("result: {}", result);
-//                                    ResponseUtil.handleResponse(ctx, result);
-//                                })
-//                                .onFailure( error -> ResponseUtil.handleResponse(ctx, ApiResponse.error(400, error.getMessage()).toJson()));
-//                    }
-//                    catch (NumberFormatException exception)
-//                    {
-//                        ResponseUtil.handleResponse(ctx, ApiResponse.error(400, "Invalid discovery ID format").toJson());
-//                    }
-//                });
 
         router.post(RUN_DISCOVERY_PATH).handler(ctx ->
         {
@@ -128,57 +107,6 @@ public class DiscoveryEndPoint extends BaseEndPoint<JsonObject>
                 ResponseUtil.handleResponse(ctx, ApiResponse.error(400, "Invalid discovery ID format").toJson());
             }
         });
-
-
-
-//        router.post(RUN_DISCOVERY_PATH)
-//                .handler(context ->
-//                {
-//                    try
-//                    {
-//                        var discoveryId = Long.parseLong(context.pathParam(Constants.DISCOVERY_ID));
-//                        var clientId = context.pathParam("clientId"); // Unique client identifier
-//
-//                        // Check if discoveryId exists
-//                        var dbRequest = new JsonObject()
-//                                .put(Constants.DB_QUERY, DiscoveryQueries.SELECT_DISCOVERY_BY_ID_WITH_CREDENTIALS)
-//                                .put(Constants.DB_PARAMS, new JsonArray().add(discoveryId));
-//
-//                        discoveryService.customQueryExecutor(dbRequest).onComplete(dbResult ->
-//                        {
-//                            if (dbResult.failed())
-//                            {
-//                                LOGGER.error("Failed to validate discoveryId: {}", dbResult.cause().getMessage());
-//                                ResponseUtil.handleResponse(context, ApiResponse.error(500, dbResult.cause().getMessage()).toJson());
-//                                return;
-//                            }
-//
-//                            var rows = dbResult.result().getJsonObject(Constants.RESULT);
-//                            if (rows.getInteger(Constants.ROW_COUNT) == 0)
-//                            {
-//                                LOGGER.error("Discovery profile not found with ID: {}", discoveryId);
-//                                ResponseUtil.handleResponse(context, ApiResponse.error(404, "Discovery profile not found").toJson());
-//                                return;
-//                            }
-//
-//                            // DiscoveryId is valid, trigger discovery asynchronously
-//                            var request = new JsonObject()
-//                                    .put(Constants.DISCOVERY_ID, discoveryId)
-//                                    .put("clientId", clientId) ;// Include clientId for tracking;
-//
-//                            vertx.eventBus().send("discovery.run", request);
-//
-//                            // Send immediate "request accepted" response
-//                            ResponseUtil.handleResponse(context, ApiResponse.success(new JsonObject().put("message", "Discovery request accepted")).toJson());
-//                        });
-//                    }
-//                    catch (Exception exception)
-//                    {
-//                        LOGGER.error("Error processing discovery request: {}", exception.getMessage());
-//                        ResponseUtil.handleResponse(context, ApiResponse.error(400, "Invalid discovery ID format").toJson());
-//                    }
-//                });
-
 
 
         router.get(DISCOVERY_STATUS_PATH)

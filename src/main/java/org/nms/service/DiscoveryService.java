@@ -175,51 +175,6 @@ public class DiscoveryService extends BaseService<JsonObject>
         }
     }
 
-
-    public Future<JsonObject> processRunDiscovery(Long discoveryId)
-    {
-        var promise = Promise.<JsonObject>promise();
-        try
-        {
-            if (discoveryId == null)
-            {
-                return Future.failedFuture("discoveryId is required");
-            }
-
-            LOGGER.info("Sending discovery request for ID: {}", discoveryId);
-
-            // Create a unique reply address
-            var replyAddress = "discovery.reply." + discoveryId ;
-
-            // Set up temporary consumer for response
-            var consumer = vertx.eventBus().<JsonObject>localConsumer(replyAddress, message ->
-            {
-                LOGGER.info("Received discovery response {}", message.body());
-                promise.complete(message.body());
-                // Unregister the consumer after handling the response
-            });
-
-            // Send discoveryId to DiscoveryVerticle with reply address
-            var request = new JsonObject()
-                    .put(Constants.DISCOVERY_ID, discoveryId)
-                    .put(Constants.REPLY_ADDRESS, replyAddress);
-
-            vertx.eventBus().send("discovery.run", request);
-
-            return promise.future().onComplete(ar ->
-            {
-                consumer.unregister();
-                LOGGER.debug("Unregistered consumer for address: {}", replyAddress);
-            });
-
-        }
-        catch (Exception exception)
-        {
-            LOGGER.error("Error in runDiscovery: {}", exception.getMessage());
-            return Future.succeededFuture(ApiResponse.error(500, exception.getMessage()).toJson());
-        }
-    }
-
     public Future<JsonObject> processRunDiscovery(JsonObject requestBody)
     {
         var promise = Promise.<JsonObject>promise();
