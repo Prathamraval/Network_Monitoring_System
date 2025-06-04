@@ -28,7 +28,6 @@ public class DiscoveryEndPoint extends BaseEndPoint<JsonObject>
     @Override
     protected void configureAdditionalRoutes(Router router)
     {
-
         router.post(RUN_DISCOVERY_PATH).handler(ctx ->
         {
             try

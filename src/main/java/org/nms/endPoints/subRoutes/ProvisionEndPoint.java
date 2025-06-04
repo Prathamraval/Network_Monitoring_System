@@ -27,7 +27,7 @@ public class ProvisionEndPoint extends BaseEndPoint<JsonObject>
     @Override
     public Router createRouter(Vertx vertx)
     {
-        Router router = super.createRouter(vertx);
+        var router = super.createRouter(vertx);
         router.route().handler(BodyHandler.create());
         configureAdditionalRoutes(router);
         return router;
