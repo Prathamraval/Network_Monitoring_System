@@ -1,13 +1,10 @@
 package org.nms.endPoints.subRoutes;
 
-import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
-import org.nms.Bootstrap;
 import org.nms.database.queries.DiscoveryQueries;
 import org.nms.endPoints.ApiResponse;
-import org.nms.endPoints.DiscoveryVerticle;
 import org.nms.service.DiscoveryService;
 import org.nms.utils.Constants;
 import org.nms.utils.ResponseUtil;
@@ -21,11 +18,11 @@ public class DiscoveryEndPoint extends BaseEndPoint<JsonObject>
     private static final String DISCOVERY_STATUS_PATH = "/status/:status";
     private static final String DISCOVERY_STATUS = "status";
     private final DiscoveryService discoveryService;
+
     public DiscoveryEndPoint()
     {
         super(new DiscoveryService(), Constants.DISCOVERY_ID);
         this.discoveryService = (DiscoveryService) service;
-
     }
 
     @Override
@@ -140,5 +137,4 @@ public class DiscoveryEndPoint extends BaseEndPoint<JsonObject>
                 .put(Constants.CRED_PROTOCOL, row.getValue(Constants.CRED_PROTOCOL))
                 .put(Constants.DISC_WAIT_TIME, row.getInteger(Constants.DISC_WAIT_TIME));
     }
-
 }

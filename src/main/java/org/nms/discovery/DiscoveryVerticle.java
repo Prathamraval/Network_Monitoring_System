@@ -1,17 +1,17 @@
-package org.nms.endPoints;
+package org.nms.discovery;
 
 import io.vertx.core.AbstractVerticle;
-import io.vertx.core.Promise;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import org.nms.endPoints.ApiResponse;
 import org.nms.poller.ZMQCommunication;
 import org.nms.service.DiscoveryService;
 import org.nms.utils.Constants;
-import org.nms.utils.DeviceReachability;
+import org.nms.utils.PromiseRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,34 +21,30 @@ public class DiscoveryVerticle extends AbstractVerticle
     private static DiscoveryService discoveryService;
     private final Map<String, ResponseHandler> pendingDiscoveries = new HashMap<>();
 
-
     @Override
     public void start()
     {
         discoveryService = new DiscoveryService();
+
         // Register consumer for discovery requests
         vertx.eventBus().<JsonObject>localConsumer("discovery.run", message ->
         {
             var body = message.body();
             var discoveryId = body.getLong(Constants.DISCOVERY_ID);
-            var replyAddress = body.getString(Constants.REPLY_ADDRESS); // Dynamic reply address
+            var promiseId = body.getString(Constants.PROMISE_ID);
 
-            if (replyAddress == null) {
-                LOGGER.error("No reply address provided for discoveryId: {}", discoveryId);
+            if (promiseId == null)
+            {
+                LOGGER.error("No promiseId provided for discoveryId: {}", discoveryId);
                 return;
             }
 
-            runDiscovery(body);
+            runDiscovery(body, promiseId);
         });
 
         // Initialize ZMQ response consumer
         initializeSharedConsumer();
     }
-
-    /**
-     * Initializes the shared consumer for ZMQ discovery responses.
-     * This consumer listens for responses on the event bus and handles them accordingly.
-     */
 
     private void initializeSharedConsumer()
     {
@@ -61,25 +57,32 @@ public class DiscoveryVerticle extends AbstractVerticle
             if (handler != null)
             {
                 vertx.cancelTimer(handler.timeoutId);
-                handler.promise.complete(responseBody);
+                var promise = PromiseRegistry.getInstance().getPromise(handler.promiseId);
+
+                LOGGER.info("Retrieved promise for promiseId: {}", handler.promiseId);
+
+                if (promise != null)
+                {
+                    promise.complete(ApiResponse.success(responseBody.getString(Constants.DETAILS)).toJson());
+                }
+                else
+                {
+                    LOGGER.warn("No promise found for promiseId: {}", handler.promiseId);
+                }
+            }
+            else
+            {
+                LOGGER.warn("No pending discovery found for requestId: {}", requestId);
             }
         });
     }
 
-    /**
-     * Handles the discovery process by performing ping and port checks,
-     * then sending a ZMQ request for SSH check.
-     *
-     * @param body The JSON object containing discovery details.
-     */
-
-    private void runDiscovery(JsonObject body)
+    private void runDiscovery(JsonObject body, String promiseId)
     {
-        var replyAddress = body.getString(Constants.REPLY_ADDRESS);
+        var discoveryId = body.getLong(Constants.DISCOVERY_ID);
 
         try
         {
-            var discoveryId = body.getLong(Constants.DISCOVERY_ID);
             var ipAddress = body.getString(Constants.DISC_IP_ADDRESS);
             var portNo = body.getInteger(Constants.DISC_PORT_NO);
             var wait_time = body.getInteger(Constants.DISC_WAIT_TIME);
@@ -89,7 +92,6 @@ public class DiscoveryVerticle extends AbstractVerticle
             {
                 // Step 1: Ping Check
                 var pingSuccess = DeviceReachability.performPingCheck(ipAddress);
-
                 if (!pingSuccess)
                 {
                     LOGGER.error("Ping check failed for IP: {}", ipAddress);
@@ -111,76 +113,82 @@ public class DiscoveryVerticle extends AbstractVerticle
                 }
 
                 LOGGER.info("Port check successful for IP: {}, Port: {}", ipAddress, portNo);
-                blockingPromise.complete();
 
+                blockingPromise.complete();
             }, result ->
             {
+                var promise = PromiseRegistry.getInstance().getPromise(promiseId);
+
                 if (result.failed())
                 {
                     LOGGER.error("Failed to perform checks: {}", result.cause().getMessage());
-                    vertx.eventBus().send(replyAddress, ApiResponse.error(400, result.cause().getMessage()).toJson());
+                    if (promise != null)
+                    {
+                        promise.complete(ApiResponse.error(400, result.cause().getMessage()).toJson());
+                    }
                     return;
                 }
 
                 // Step 3: SSH Check via ZMQ
                 var requestId = "discovery-" + discoveryId + "-" + System.currentTimeMillis();
-                var zmqPromise = Promise.<JsonObject>promise();
 
-                // Set timeout (e.g., 2 seconds)
-                long timeoutId = vertx.setTimer(wait_time * 1000, id ->
+                // Set timeout
+                var timeoutId = vertx.setTimer(wait_time * 1000, id ->
                 {
-                    var removed = pendingDiscoveries.remove(requestId);
-                    if (removed != null) {
-                        zmqPromise.complete(ApiResponse.error(408, "Timeout waiting for discovery response").toJson());
+                    var handler = pendingDiscoveries.remove(requestId);
+
+                    if (handler != null)
+                    {
+                        var timeoutPromise = PromiseRegistry.getInstance().getPromise(handler.promiseId);
+
+                        if (timeoutPromise != null)
+                        {
+                            updateDiscoveryStatus(body, false, "Timeout waiting for discovery response");
+                            timeoutPromise.complete(ApiResponse.error(408, "Timeout waiting for discovery response").toJson());
+                        }
                     }
                 });
 
-                pendingDiscoveries.put(requestId, new ResponseHandler(zmqPromise, timeoutId));
+                pendingDiscoveries.put(requestId, new ResponseHandler(promiseId, timeoutId));
 
                 var zmqRequest = new JsonObject()
                         .put(Constants.REQUEST_ID, requestId)
                         .put(Constants.COMMAND, Constants.COMMAND_DISCOVERY)
                         .put(Constants.DATA, new JsonArray().add(body));
 
-                // Send request (no reply needed)
+                // Send ZMQ request
+                LOGGER.info("Sending ZMQ request with requestId: {}", requestId);
                 vertx.eventBus().send(ZMQCommunication.EB_ZMQ_SEND, zmqRequest);
 
-                zmqPromise.future().onComplete(zmqResult ->
-                {
-                    if (zmqResult.failed())
+                // Handle ZMQ response for status update
+                promise.future().onComplete(response ->
                     {
-                        LOGGER.error("ZMQ failed: {}", zmqResult.cause().getMessage());
-                        vertx.eventBus().send(replyAddress, ApiResponse.error(500, zmqResult.cause().getMessage()).toJson());
-                        return;
-                    }
+                        LOGGER.info("ZMQ response : {}", response.result());
+                        var responseJsonObject = response.result();
+                        var discoverySuccess = responseJsonObject.getBoolean(Constants.SUCCESS, false);
+                        var details = responseJsonObject.getString(Constants.MESSAGE, "");
 
-                    var zmqResponse = zmqResult.result();
-                    var discoverySuccess = zmqResponse.getBoolean(Constants.SUCCESS, false);
-                    var details = zmqResponse.getString(Constants.DETAILS, "");
-
-                    var response = new JsonObject()
-                            .put(Constants.DISCOVERY_ID, discoveryId)
-                            .put(Constants.SUCCESS, discoverySuccess)
-                            .put(Constants.DETAILS, details);
-
-                    vertx.eventBus().send(replyAddress, ApiResponse.success(response).toJson());
-
-                    updateDiscoveryStatus(body, discoverySuccess, details);
-                });
+                        updateDiscoveryStatus(body, discoverySuccess, details);
+                    });
             });
-
         }
         catch (Exception exception)
         {
             LOGGER.error("Error in runDiscovery: {}", exception.getMessage());
-            vertx.eventBus().send(replyAddress, ApiResponse.error(500, exception.getMessage()).toJson());
+            var promise = PromiseRegistry.getInstance().getPromise(promiseId);
+
+            if (promise != null)
+            {
+                updateDiscoveryStatus(body, false, "Error: " + exception.getMessage());
+                promise.complete(ApiResponse.error(500, exception.getMessage()).toJson());
+            }
         }
     }
 
     public static void updateDiscoveryStatus(JsonObject discoveryDetails, boolean status, String message)
     {
         discoveryDetails.put(Constants.STATUS, status)
-                .put(Constants.DISC_LAST_DISCOVERY_TIME, Instant.now().toString())
+                .put(Constants.DISC_LAST_DISCOVERY_TIME, OffsetDateTime.now(Constants.IST_ZONE).toString())
                 .put(Constants.MESSAGE, message);
 
         discoveryService.update(discoveryDetails);
@@ -188,12 +196,12 @@ public class DiscoveryVerticle extends AbstractVerticle
 
     private static class ResponseHandler
     {
-        final Promise<JsonObject> promise;
+        final String promiseId;
         final long timeoutId;
 
-        ResponseHandler(Promise<JsonObject> promise, long timeoutId)
+        ResponseHandler(String promiseId, long timeoutId)
         {
-            this.promise = promise;
+            this.promiseId = promiseId;
             this.timeoutId = timeoutId;
         }
     }

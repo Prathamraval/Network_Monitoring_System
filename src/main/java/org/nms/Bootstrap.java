@@ -3,7 +3,7 @@ package org.nms;
 import io.vertx.core.Future;
 import io.vertx.core.Verticle;
 import io.vertx.core.Vertx;
-import org.nms.endPoints.DiscoveryVerticle;
+import org.nms.discovery.DiscoveryVerticle;
 import org.nms.endPoints.Server;
 import org.nms.database.DatabaseVerticle;
 import org.nms.poller.ZMQCommunication;

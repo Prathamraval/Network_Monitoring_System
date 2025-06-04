@@ -91,13 +91,3 @@ public class CredentialService extends BaseService<JsonObject>
                 .put(Constants.CRED_ID_RESPONSE, row.getLong(Constants.CRED_ID));
     }
 }
-
-
-//    // Parameter mappings for database queries
-//    private static final List<String> CREATE_PARAMS = List.of(
-//            FIELD_PROFILE_NAME, FIELD_PROTOCOL, FIELD_USERNAME, FIELD_PASSWORD
-//    );
-//
-//    private static final List<String> UPDATE_PARAMS = List.of(
-//            FIELD_PROFILE_NAME, FIELD_PROTOCOL, FIELD_USERNAME, FIELD_PASSWORD, FIELD_ID
-//    );

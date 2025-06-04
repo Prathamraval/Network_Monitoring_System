@@ -29,8 +29,6 @@ public class PollerEngine extends AbstractVerticle
 
     private static final long POLLING_CHECK_INTERVAL_MS = 5000; // 5 seconds
 
-    private static final ZoneId IST_ZONE = ZoneId.of("Asia/Kolkata");
-
     private PollingService pollingService;
 
     private long timerMetricsId;
@@ -103,7 +101,7 @@ public class PollerEngine extends AbstractVerticle
 
         LOGGER.info("Responded devices-------- {}", respondedDevices.get(requestId));
 
-        var timestamp = response.getString(Constants.POLLING_TIMESTAMP, OffsetDateTime.now(IST_ZONE).toString());
+        var timestamp = response.getString(Constants.POLLING_TIMESTAMP, OffsetDateTime.now(Constants.IST_ZONE).toString());
 
         pollingService.updateDeviceTimestamp(monitorId.longValue(), timestamp);
 
@@ -135,7 +133,7 @@ public class PollerEngine extends AbstractVerticle
         }
 
         var responded = respondedDevices.get(requestId);
-        var batchStartTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(batchStartTimeMs), IST_ZONE);
+        var batchStartTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(batchStartTimeMs), Constants.IST_ZONE);
 
         if (responded.size() < batch.size())
         {
@@ -149,7 +147,7 @@ public class PollerEngine extends AbstractVerticle
                 {
                     LOGGER.warn("No response for device {} in request {}", monitorId, requestId);
 
-                    var offsetDateTime = batchStartTime.atZone(IST_ZONE).toOffsetDateTime();
+                    var offsetDateTime = batchStartTime.atZone(Constants.IST_ZONE).toOffsetDateTime();
 
                     var deviceMetrics = new JsonObject()
                             .put(Constants.POLLING_TIMESTAMP, offsetDateTime.toString())
@@ -342,7 +340,7 @@ public class PollerEngine extends AbstractVerticle
 
         if (timestampStr == null) {
             LOGGER.warn("No timestamp in device metrics for monitor ID: {}", monitorId);
-            timestampStr = OffsetDateTime.now(IST_ZONE).toString();
+            timestampStr = OffsetDateTime.now(Constants.IST_ZONE).toString();
         }
 
         LocalDateTime timestamp;
@@ -354,7 +352,7 @@ public class PollerEngine extends AbstractVerticle
                 timestamp = LocalDateTime.parse(timestampStr);
             } catch (DateTimeParseException e2) {
                 LOGGER.error("Failed to parse timestamp: {} for monitor ID: {}", timestampStr, monitorId, e2);
-                timestamp = LocalDateTime.ofInstant(Instant.now(), IST_ZONE);
+                timestamp = LocalDateTime.ofInstant(Instant.now(), Constants.IST_ZONE);
             }
         }
 

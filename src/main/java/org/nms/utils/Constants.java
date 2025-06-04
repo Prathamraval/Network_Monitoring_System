@@ -1,5 +1,7 @@
 package org.nms.utils;
 
+import java.time.ZoneId;
+
 public class Constants
 {
 
@@ -74,4 +76,8 @@ public class Constants
     public static final String ENTITY = "entity";
     public static final String REPLY_ADDRESS = "replyaddress";
     public static final String RESULT = "result";
+
+    public static final ZoneId IST_ZONE = ZoneId.of("Asia/Kolkata");
+
+    public static final String PROMISE_ID = "promiseId";
 }

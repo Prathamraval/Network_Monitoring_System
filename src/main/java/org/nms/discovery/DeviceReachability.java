@@ -1,9 +1,8 @@
-package org.nms.utils;
+package org.nms.discovery;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.util.logging.Logger;
 
 public class DeviceReachability
 {

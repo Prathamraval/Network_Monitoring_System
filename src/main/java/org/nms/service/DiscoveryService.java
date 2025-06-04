@@ -7,9 +7,11 @@ import io.vertx.core.Promise;
 import org.nms.database.queries.DiscoveryQueries;
 import org.nms.endPoints.ApiResponse;
 import org.nms.utils.Constants;
+import org.nms.utils.PromiseRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.UUID;
 import java.util.function.Function;
 
 public class DiscoveryService extends BaseService<JsonObject>
@@ -106,6 +108,7 @@ public class DiscoveryService extends BaseService<JsonObject>
                     .put("ipAddress", row.getString(Constants.DISC_IP_ADDRESS))
                     .put("portNo", row.getInteger(Constants.DISC_PORT_NO))
                     .put("status", row.getBoolean(Constants.STATUS))
+                    .put("message", row.getString(Constants.MESSAGE, ""))
                     .put("wait_time", row.getInteger(Constants.DISC_WAIT_TIME))
                     .put(Constants.DISC_LAST_DISCOVERY_TIME, row.getValue(Constants.DISC_LAST_DISCOVERY_TIME))
                     .put("credentials", credentials);
@@ -175,26 +178,36 @@ public class DiscoveryService extends BaseService<JsonObject>
         }
     }
 
-    public Future<JsonObject> processRunDiscovery(JsonObject requestBody)
+
+    public Future<JsonObject> processRunDiscovery(Long discoveryId)
     {
         var promise = Promise.<JsonObject>promise();
         try
         {
-            var discoveryId = requestBody.getLong(Constants.DISCOVERY_ID);
+            if (discoveryId == null)
+            {
+                return Future.failedFuture("discoveryId is required");
+            }
+
+            LOGGER.info("Sending discovery request for ID: {}", discoveryId);
+
+            // Create a unique reply address
             var replyAddress = "discovery.reply." + discoveryId ;
 
             // Set up temporary consumer for response
-            var consumer = vertx.eventBus().consumer(replyAddress, message ->
+            var consumer = vertx.eventBus().<JsonObject>localConsumer(replyAddress, message ->
             {
                 LOGGER.info("Received discovery response {}", message.body());
-                promise.complete((JsonObject) message.body());
+                promise.complete(message.body());
                 // Unregister the consumer after handling the response
             });
 
             // Send discoveryId to DiscoveryVerticle with reply address
-            requestBody.put(Constants.REPLY_ADDRESS, replyAddress);
+            var request = new JsonObject()
+                    .put(Constants.DISCOVERY_ID, discoveryId)
+                    .put(Constants.REPLY_ADDRESS, replyAddress);
 
-            vertx.eventBus().send("discovery.run", requestBody);
+            vertx.eventBus().send("discovery.run", request);
 
             return promise.future().onComplete(ar ->
             {
@@ -206,6 +219,39 @@ public class DiscoveryService extends BaseService<JsonObject>
         catch (Exception exception)
         {
             LOGGER.error("Error in runDiscovery: {}", exception.getMessage());
+            return Future.succeededFuture(ApiResponse.error(500, exception.getMessage()).toJson());
+        }
+    }
+
+    public Future<JsonObject> processRunDiscovery(JsonObject requestBody)
+    {
+        var promise = Promise.<JsonObject>promise();
+        try
+        {
+            requestBody = new JsonObject(requestBody.encode()); // Defensive copy
+            var discoveryId = requestBody.getLong(Constants.DISCOVERY_ID);
+            var promiseId = "promise-" + discoveryId + "-" + UUID.randomUUID().toString();
+
+            // Register promise in PromiseRegistry
+            PromiseRegistry.getInstance().registerPromise(promiseId, promise);
+
+            // Add promiseId to request body
+            requestBody.put(Constants.PROMISE_ID, promiseId);
+
+            // Send to DiscoveryVerticle
+            LOGGER.info("Sending discovery request with promiseId: {}", promiseId);
+            vertx.eventBus().send("discovery.run", requestBody);
+
+            // Clean up registry when promise completes
+            return promise.future().onComplete(ar ->
+            {
+                PromiseRegistry.getInstance().removePromise(promiseId);
+                LOGGER.debug("Removed promise for promiseId: {}", promiseId);
+            });
+        }
+        catch (Exception exception)
+        {
+            LOGGER.error("Error in processRunDiscovery: {}", exception.getMessage());
             return Future.succeededFuture(ApiResponse.error(500, exception.getMessage()).toJson());
         }
     }
