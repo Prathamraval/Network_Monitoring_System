@@ -13,11 +13,8 @@ import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 public class PollerEngine extends AbstractVerticle
 {
@@ -33,19 +30,18 @@ public class PollerEngine extends AbstractVerticle
 
     private long timerMetricsId;
 
-    private final HashMap<String, JsonArray> pendingRequests = new HashMap<>();
+    private final HashMap<String, JsonArray> pendingRequests = new HashMap<>(); //requestId to JsonArray of devices
 
-    private final HashMap<String, List<Long>> respondedDevices = new HashMap<>();
+    private final HashMap<String, List<Long>> respondedDevices = new HashMap<>();// requestId to list of monitor_ids that responded
 
-    private final HashMap<String, Long> batchAvgWaitTimes = new HashMap<>();
+    private final HashMap<String, Long> batchAvgWaitTimes = new HashMap<>();// requestId to average wait time in ms
 
     private final HashMap<String, Long> batchTimerIds = new HashMap<>();
 
-    private final HashMap<Long, String> pendingDevices = new HashMap<>(); // monitor_id to request_id
+    private final Set<Long> pendingDevices = new HashSet<>() ; // monitor_id to request_id
 
     private String lastBatchId = null;
 
-    private final ConcurrentMap<Long, JsonObject> cache = new ConcurrentHashMap<>();
 
     @Override
     public void start(Promise<Void> startPromise)
@@ -69,7 +65,6 @@ public class PollerEngine extends AbstractVerticle
         batchAvgWaitTimes.clear();
         batchTimerIds.clear();
         pendingDevices.clear();
-        cache.clear();
         stopPromise.complete();
         LOGGER.info("MetricsCollectionVerticle stopped successfully");
     }
@@ -111,6 +106,7 @@ public class PollerEngine extends AbstractVerticle
         }
 
         var batch = pendingRequests.get(requestId);
+
         if (batch != null)
         {
             var expectedSize = batch.size();
@@ -178,9 +174,9 @@ public class PollerEngine extends AbstractVerticle
         vertx.setTimer(POLLING_CHECK_INTERVAL_MS, id -> collectMetrics());
     }
 
-    private Future<Object> collectMetrics()
+    private void collectMetrics()
     {
-        return pollingService.getDeviceToMonitor(pendingDevices).compose(devices ->
+        pollingService.getDeviceToMonitor(pendingDevices).compose(devices ->
         {
             var provisions = devices.getJsonArray(Constants.PROVISIONS);
             LOGGER.info("Provisions: {}", provisions);
@@ -249,7 +245,7 @@ public class PollerEngine extends AbstractVerticle
                             .put(Constants.DISC_WAIT_TIME, waitTimeSec)); // Send wait_time to Go
                 }
 
-                long avgWaitTimeMs = batch.size() > 0 ? sumWaitTimeMs / batch.size() : 0;
+                long avgWaitTimeMs = !batch.isEmpty() ? sumWaitTimeMs / batch.size() : 0;
                 long batchTimeoutMs = (start == 0 ? maxWaitTimeMs : (previousAvgWaitTimeMs + maxWaitTimeMs))+BATCH_BUFFER_TIME ;
 
                 LOGGER.info("Batch {}: size={}, avgWaitTimeMs={}, batchTimeoutMs={} previousAvgWaitTimeMs= {}", start / BATCH_SIZE, batch.size(), avgWaitTimeMs, batchTimeoutMs, previousAvgWaitTimeMs);
@@ -287,7 +283,7 @@ public class PollerEngine extends AbstractVerticle
         for (var i = 0; i < batch.size(); i++)
         {
             var device = batch.getJsonObject(i);
-            pendingDevices.put(device.getLong(Constants.MONITOR_ID), requestId);
+            pendingDevices.add(device.getLong(Constants.MONITOR_ID));
         }
 
         long batchStartTimeMs = System.currentTimeMillis();
@@ -361,10 +357,13 @@ public class PollerEngine extends AbstractVerticle
                 .put(Constants.DATA, deviceMetrics)
                 .put(Constants.POLLING_TIMESTAMP, timestamp.toString());
 
-        pollingService.insertPollingData(params).onComplete(result -> {
-            if (result.succeeded()) {
+        pollingService.insertPollingData(params).onComplete(result ->
+        {
+            if (result.succeeded())
+            {
                 LOGGER.info("Stored metrics for monitor ID: {}", monitorId);
-            } else {
+            } else
+            {
                 LOGGER.error("Failed to store metrics for monitor ID: {}", monitorId, result.cause());
             }
         });

@@ -164,7 +164,7 @@ public class ZMQCommunication extends AbstractVerticle
     private void setupEventBusConsumer()
     {
         // Register consumer for send requests
-        sendConsumer = vertx.eventBus().<JsonObject>consumer(EB_ZMQ_SEND, message ->
+        sendConsumer = vertx.eventBus().consumer(EB_ZMQ_SEND, message ->
         {
             var request =  message.body();
 

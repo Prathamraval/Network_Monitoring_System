@@ -64,6 +64,7 @@ public abstract class BaseEndPoint<T>
         router.get("/")
                 .handler(ctx ->
                 {
+
                     service.getAll()
                             .onSuccess(result ->
                             {

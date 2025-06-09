@@ -57,29 +57,10 @@ public class DatabaseService
 
     public Future<RowSet<Row>> executeQuery(String query)
     {
-        return vertx.executeBlocking(promise ->
-        {
-            pool.query(query).execute()
-                    .onSuccess(promise::complete)
-                    .onFailure(error ->
-                    {
-                        LOGGER.error("Error executing query: {}", error.getMessage());
-                        promise.fail(error);
-                    });
-        });
+        return pool.query(query).execute();
     }
     public Future<RowSet<Row>> executePreparedQuery(String query, Tuple params)
     {
-        return vertx.executeBlocking(promise ->
-        {
-            pool.preparedQuery(query).execute(params)
-                    .onSuccess(promise::complete)
-                    .onFailure(error ->
-                    {
-                        LOGGER.error("Error executing query: {}", error.getMessage());
-                        promise.fail(error);
-                    });
-        });
-
+        return pool.preparedQuery(query).execute(params);
     }
 }

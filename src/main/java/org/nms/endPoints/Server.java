@@ -27,11 +27,10 @@ public class Server extends AbstractVerticle
         var router = Router.router(vertx);
 
         // Mount REST sub-routes
-        router.mountSubRouter(CREDENTIAL_PATH, new CredentialEndPoint().createRouter(vertx));
-        router.mountSubRouter(DISCOVERY_PATH, new DiscoveryEndPoint().createRouter(vertx));
-        router.mountSubRouter(POLLING_PATH, new PollingEndPoint().createRouter(vertx));
-        router.mountSubRouter(PROVISION_PATH, new ProvisionEndPoint().createRouter(vertx));
-
+        router.route(CREDENTIAL_PATH + "/*").subRouter(new CredentialEndPoint().createRouter(vertx));
+        router.route(DISCOVERY_PATH + "/*").subRouter(new DiscoveryEndPoint().createRouter(vertx));
+        router.route(POLLING_PATH + "/*").subRouter(new PollingEndPoint().createRouter(vertx));
+        router.route(PROVISION_PATH + "/*").subRouter(new ProvisionEndPoint().createRouter(vertx));
         // Start HTTP server
         vertx.createHttpServer()
                 .requestHandler(router)

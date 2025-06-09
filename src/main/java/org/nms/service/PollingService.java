@@ -13,6 +13,8 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 public class PollingService extends BaseService<JsonObject>
@@ -33,7 +35,7 @@ public class PollingService extends BaseService<JsonObject>
             Constants.MONITOR_ID
     };
 
-    public static final HashMap<Long, JsonObject> cache = new HashMap<>();
+    public static final Map<Long, JsonObject> cache = new HashMap<>();
 
     public PollingService()
     {
@@ -159,7 +161,7 @@ public class PollingService extends BaseService<JsonObject>
     }
 
 
-    public Future<JsonObject> getDeviceToMonitor(HashMap<Long, String> pendingDevices)
+    public Future<JsonObject> getDeviceToMonitor(Set<Long> pendingDevices)
     {
         LOGGER.info("Fetching devices to monitor");
 
@@ -170,7 +172,7 @@ public class PollingService extends BaseService<JsonObject>
             {
                 try
                 {
-                    if (provision.getBoolean(Constants.STATUS, true) && !pendingDevices.containsKey(provisionId))
+                    if (provision.getBoolean(Constants.STATUS, true) && !pendingDevices.contains(provisionId))
                     {
                         var lastPoolStr = provision.getString(Constants.LAST_POLL);
 

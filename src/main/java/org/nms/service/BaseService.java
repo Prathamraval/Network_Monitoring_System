@@ -124,6 +124,7 @@ public abstract class BaseService<T>
         }
     }
 
+
     public Future<JsonObject> getAll()
     {
         LOGGER.info("Fetching all entities");

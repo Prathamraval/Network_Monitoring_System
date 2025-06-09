@@ -151,7 +151,7 @@ public class Bootstrap
             goProcess.destroy();
             try
             {
-                // Wait up to 5 seconds for the process to terminate
+                // Wait up to 1 seconds for the process to terminate
                 var terminated = goProcess.waitFor(1, TimeUnit.SECONDS);
 
                 if (terminated)
