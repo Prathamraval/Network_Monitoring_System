@@ -325,7 +325,7 @@ public abstract class BaseService<T>
 
         if (errorMessage != null && errorMessage.contains("duplicate key value"))
         {
-            errorMessage = "Entity with the same name already exists.";
+            errorMessage = "Same entity already exist.";
 
             LOGGER.info("Duplicate key value error: {}", errorMessage);
 

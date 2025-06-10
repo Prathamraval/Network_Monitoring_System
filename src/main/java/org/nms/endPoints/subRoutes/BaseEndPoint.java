@@ -48,7 +48,7 @@ public abstract class BaseEndPoint<T>
                                 {
                                     statusCode = 500;
                                 }
-                                else if (message.equals("Entity with the same name already exists."))
+                                else if (message.equals("Same entity already exist."))
                                 {
                                     statusCode = 409;
                                 }
@@ -140,7 +140,7 @@ public abstract class BaseEndPoint<T>
                                     {
                                         statusCode = 400;
                                     }
-                                    else if (message.equals("Entity with the same name already exists."))
+                                    else if (message.equals("Same entity already exist."))
                                     {
                                         statusCode = 409;
                                     }

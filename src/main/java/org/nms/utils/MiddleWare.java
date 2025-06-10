@@ -80,6 +80,16 @@ public class MiddleWare
                 return false;
             }
         }
+        if(body.containsKey(Constants.DISC_WAIT_TIME))
+        {
+            var waitTime = body.getInteger(Constants.DISC_WAIT_TIME);
+            if (waitTime == null || waitTime < 3 )
+            {
+                ResponseUtil.handleResponse(context, ApiResponse.error(400, "Wait time must be a non-negative integer and greater than or equals to 3.").toJson());
+
+                return false;
+            }
+        }
 
         for (var param : requiredParams)
         {

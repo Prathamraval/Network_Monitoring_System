@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 public class ProvisionEndPoint extends BaseEndPoint<JsonObject>
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(ProvisionEndPoint.class);
+    private static final String PROVISION_STATUS_PATH = "/status/:" + Constants.PROVISION_STATUS;
 
     public ProvisionEndPoint()
     {
@@ -48,8 +49,7 @@ public class ProvisionEndPoint extends BaseEndPoint<JsonObject>
                                 .put(Constants.DB_QUERY, ProvisionQueries.SELECT_PROVISION_BY_DISCOVERY_ID)
                                 .put(Constants.DB_PARAMS, new JsonArray().add(discoveryId));
 
-                        (service)
-                                .customQueryExecutor(request)
+                        service.customQueryExecutor(request)
                                 .compose(queryResult ->
                                 {
                                     LOGGER.info("Query result: {}", queryResult);
@@ -61,7 +61,7 @@ public class ProvisionEndPoint extends BaseEndPoint<JsonObject>
                                         {
                                             var softInsert = new JsonObject()
                                                     .put(Constants.DB_QUERY, ProvisionQueries.SOFT_INSERT_PROVISION)
-                                                    .put(Constants.DB_PARAMS, new JsonArray().add(result.getJsonArray(Constants.ROWS).getJsonObject(0).getLong("monitor_id")));
+                                                    .put(Constants.DB_PARAMS, new JsonArray().add(result.getJsonArray(Constants.ROWS).getJsonObject(0).getLong(Constants.MONITOR_ID)));
 
                                              return (service).customQueryExecutor(softInsert);
                                         }
@@ -99,7 +99,7 @@ public class ProvisionEndPoint extends BaseEndPoint<JsonObject>
 
 
         // GET /status/:status for provisions by status
-        router.get("/status/:" + Constants.PROVISION_STATUS)
+        router.get(PROVISION_STATUS_PATH)
                 .handler(context ->
                 {
                     try
@@ -137,7 +137,9 @@ public class ProvisionEndPoint extends BaseEndPoint<JsonObject>
                         var updateProvision = new JsonObject()
                                 .put(Constants.PROVISION_STATUS,status)
                                 .put(Constants.MONITOR_ID,monitorId);
+
                         LOGGER.info("updateProvision: {}", updateProvision);
+
                         service.update(updateProvision)
                                 .onComplete(result ->
                                 {

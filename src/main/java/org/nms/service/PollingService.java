@@ -15,6 +15,7 @@ import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 public class PollingService extends BaseService<JsonObject>
@@ -35,7 +36,7 @@ public class PollingService extends BaseService<JsonObject>
             Constants.MONITOR_ID
     };
 
-    public static final Map<Long, JsonObject> cache = new HashMap<>();
+    public static final Map<Long, JsonObject> cache = new ConcurrentHashMap<>();
 
     public PollingService()
     {
@@ -190,7 +191,7 @@ public class PollingService extends BaseService<JsonObject>
                                     lastPoolTime = LocalDateTime.parse(lastPoolStr).atZone(ZoneId.of("Asia/Kolkata")).toOffsetDateTime();
                                 }
 
-                                var nextPollTime = lastPoolTime.plusMinutes(5);
+                                var nextPollTime = lastPoolTime.plusMinutes(2);
                                 var currentTime = OffsetDateTime.now();
 
                                 if (nextPollTime.isBefore(currentTime))
