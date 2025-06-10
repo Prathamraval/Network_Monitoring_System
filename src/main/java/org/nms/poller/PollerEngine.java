@@ -260,17 +260,17 @@ public class PollerEngine extends AbstractVerticle
             // Get previous average wait time more efficiently
             var previousAvgWaitTimeMs = 0L;
 
-            if (lastBatchId != null)
-            {
-                var lastBatch = activeBatches.get(lastBatchId);
-                if (lastBatch != null)
-                {
-                    previousAvgWaitTimeMs = lastBatch.getAvgWaitTimeMs();
-                }
-            }
-
             for (var start = 0; start < totalDevices; start += BATCH_SIZE)
             {
+                if (lastBatchId != null)
+                {
+                    var lastBatch = activeBatches.get(lastBatchId);
+                    if (lastBatch != null)
+                    {
+                        previousAvgWaitTimeMs = lastBatch.getAvgWaitTimeMs();
+                    }
+                }
+
                 var batch = new JsonArray();
                 var end = Math.min(start + BATCH_SIZE, totalDevices);
                 long maxWaitTimeMs = 0;
@@ -306,7 +306,7 @@ public class PollerEngine extends AbstractVerticle
                 var requestId = UUID.randomUUID().toString();
                 lastBatchId = requestId;
 
-                sendMetricsRequest(batch, requestId, batchTimeoutMs, previousAvgWaitTimeMs + avgWaitTimeMs);
+                sendMetricsRequest(batch, requestId, batchTimeoutMs, (previousAvgWaitTimeMs + avgWaitTimeMs));
             }
 
             return Future.succeededFuture();
