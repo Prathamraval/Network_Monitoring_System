@@ -215,7 +215,6 @@ public class PollingService extends BaseService<JsonObject>
                     LOGGER.error("Error processing provision ID {}: {}", provisionId, e.getMessage());
                 }
 
-
             });
 
             return Future.succeededFuture(new JsonObject().put(Constants.PROVISIONS, activeProvisions));

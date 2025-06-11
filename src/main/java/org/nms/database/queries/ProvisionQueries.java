@@ -129,10 +129,10 @@ public class ProvisionQueries
                 monitor_id,
                 discovery_id,
                 d.discovery_name,
-                status
-            FROM provision
-            JOIN discovery_profiles d ON provision.discovery_id = d.id
-            WHERE status = $1 AND is_deleted = FALSE;
+                p.status
+            FROM provision p
+            JOIN discovery_profiles d ON p.discovery_id = d.id
+            WHERE p.status = $1 AND is_deleted = FALSE;
             """;
 
     public static final String UPDATE_PROVISION_STATUS_BY_ID = """

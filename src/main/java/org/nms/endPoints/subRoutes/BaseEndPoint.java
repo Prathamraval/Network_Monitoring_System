@@ -9,8 +9,6 @@ import org.nms.service.BaseService;
 import org.nms.utils.Constants;
 import org.nms.utils.MiddleWare;
 import org.nms.utils.ResponseUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public abstract class BaseEndPoint<T>
 {
@@ -36,9 +34,9 @@ public abstract class BaseEndPoint<T>
                 {
                     service.create(context.getBodyAsJson())
                             .onSuccess(result ->
-                            {
-                                ResponseUtil.handleResponse(context, ApiResponse.success(result).toJson());
-                            })
+
+                                ResponseUtil.handleResponse(context, ApiResponse.success(result).toJson())
+                            )
                             .onFailure(error ->
                             {
                                 var statusCode = 500;

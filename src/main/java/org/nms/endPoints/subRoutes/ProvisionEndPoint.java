@@ -53,7 +53,7 @@ public class ProvisionEndPoint extends BaseEndPoint<JsonObject>
                                 .compose(queryResult ->
                                 {
                                     LOGGER.info("Query result: {}", queryResult);
-                                    var result = queryResult.getJsonObject("result");
+                                    var result = queryResult.getJsonObject(Constants.RESULT);
 
                                     if (result.getInteger(Constants.ROW_COUNT)!=0)
                                     {

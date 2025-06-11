@@ -127,47 +127,41 @@ public class DiscoveryService extends BaseService<JsonObject>
             var dbRequest = new JsonObject()
                     .put(Constants.DB_QUERY, query)
                     .put(Constants.DB_PARAMS, params);
+
             var promise = Promise.<JsonObject>promise();
 
-            vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_EVENTBUS, dbRequest, reply ->
+            customQueryExecutor(dbRequest).compose(reply ->
             {
                 try
                 {
-                    if (reply.succeeded())
+                    var rows = reply.getJsonObject(Constants.RESULT);
+                    if (rows.getInteger(Constants.ROW_COUNT, 0) == 0)
                     {
-                        var rows = reply.result().body();
-                        if (rows.getInteger(Constants.ROW_COUNT, 0) == 0)
-                        {
-                            LOGGER.error("No discovery profiles found with status: {}", status);
-                            promise.complete(ApiResponse.error(404, "No discovery profiles found with status: " + status).toJson());
-                            return;
-                        }
-
-                        var discoveries = new JsonArray();
-                        var rowsArray = rows.getJsonArray(Constants.ROWS, new JsonArray());
-
-                        for (var i = 0; i < rowsArray.size(); i++)
-                        {
-                            var row = rowsArray.getJsonObject(i);
-                            discoveries.add(getRowToResponseMapper().apply(row));
-                        }
-
-                        promise.complete(ApiResponse.success(new JsonObject().put("discoveries", discoveries)).toJson());
+                        LOGGER.error("No discovery profiles found with status: {}", status);
+                        return Future.succeededFuture(ApiResponse.error(404, "No discovery profiles found with status: " + status).toJson());
                     }
-                    else
+
+                    var discoveries = new JsonArray();
+                    var rowsArray = rows.getJsonArray(Constants.ROWS, new JsonArray());
+
+                    for (var i = 0; i < rowsArray.size(); i++)
                     {
-                        LOGGER.error("Error fetching by status: {}", reply.cause().getMessage());
-
-                        promise.complete(ApiResponse.error(500, reply.cause().getMessage()).toJson());
+                        var row = rowsArray.getJsonObject(i);
+                        discoveries.add(getRowToResponseMapper().apply(row));
                     }
+
+                    return Future.succeededFuture(ApiResponse.success(new JsonObject().put("discoveries", discoveries)).toJson());
                 }
                 catch (Exception exception)
                 {
                     LOGGER.error("Error processing DB response: {}", exception.getMessage());
-
-                    promise.complete(ApiResponse.error(500, "Error processing DB response").toJson());
+                    return Future.succeededFuture(ApiResponse.error(500, "Error processing DB response").toJson());
                 }
-            });
+            }).onFailure(error ->
+            {
+                LOGGER.error("Error in getDiscoveriesByStatus: {}", error.getMessage());
+                promise.complete(ApiResponse.error(500, error.getMessage()).toJson());
+            }).onSuccess(promise::complete);
 
             return promise.future();
         }
@@ -177,8 +171,6 @@ public class DiscoveryService extends BaseService<JsonObject>
             return Future.succeededFuture(ApiResponse.error(500, exception.getMessage()).toJson());
         }
     }
-
-
     public Future<JsonObject> processRunDiscovery(Long discoveryId)
     {
         var promise = Promise.<JsonObject>promise();

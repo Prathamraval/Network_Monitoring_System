@@ -111,53 +111,54 @@ public class ProvisionService extends BaseService<JsonObject>
         var dbRequest = new JsonObject()
                 .put(Constants.DB_QUERY, ProvisionQueries.CHECK_DISCOVERY_ID_STATUS)
                 .put(Constants.DB_PARAMS, new JsonArray().add(discoveryId));
-
         var promise = Promise.<JsonObject>promise();
 
-        vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_EVENTBUS, dbRequest)
-                .compose(reply ->
+        customQueryExecutor(dbRequest).compose(reply ->
+        {
+            try
+            {
+                var rows = reply.getJsonObject(Constants.RESULT);
+                if (rows.getInteger(Constants.ROW_COUNT, 0) == 0)
                 {
-                    var rows = reply.body();
-                    if (rows.getInteger(Constants.ROW_COUNT, 0) == 0)
+                    LOGGER.error("Discovery ID {} is not eligible for provisioning", discoveryId);
+                    return Future.failedFuture("Discovery ID is not eligible for provisioning");
+                }
+
+                return create(new JsonObject().put(Constants.DISC_ID, discoveryId)).compose(insertReply ->
+                {
+                    LOGGER.info("insert reply {}", insertReply);
+                    var monitorId = insertReply.getValue(Constants.ID);
+
+                    return getById((Long) monitorId).compose(result ->
                     {
-                        LOGGER.error("Discovery ID {} is not eligible for provisioning", discoveryId);
-
-                        return Future.failedFuture( "Discovery ID is not eligible for provisioning");
-                    }
-
-                    return create(new JsonObject().put(Constants.DISC_ID, discoveryId)).compose(insertReply ->
-                    {
-                        LOGGER.info("insert reply {}", insertReply);
-
-                        var monitorId = insertReply.getValue(Constants.ID);
-
-                        return getById((Long) monitorId).compose(result ->
+                        LOGGER.info("Result from getById: {}", result.encodePrettily());
+                        try
                         {
-                            LOGGER.info("Result from getById: {}", result.encodePrettily());
-                            try
-                            {
-                                vertx.eventBus().send(Constants.EVENT_PROVISION_CHANGED, new JsonObject()
-                                        .put(Constants.ACTION, "create")
-                                        .put(PROVISION, result.getJsonObject(Constants.ENTITY).put(Constants.LAST_POLL,null)));
-                            }
-                            catch (Exception exception)
-                            {
-                                LOGGER.error("Failed to publish event: {}", exception.getMessage());
-                            }
-                            return Future.succeededFuture(insertReply);
-                        });
+                            vertx.eventBus().send(Constants.EVENT_PROVISION_CHANGED, new JsonObject()
+                                    .put(Constants.ACTION, "create")
+                                    .put(PROVISION, result.getJsonObject(Constants.ENTITY).put(Constants.LAST_POLL, null)));
+                        }
+                        catch (Exception exception)
+                        {
+                            LOGGER.error("Failed to publish event: {}", exception.getMessage());
+                        }
+                        return Future.succeededFuture(insertReply);
                     });
-                })
-                .onSuccess(result->
-                {
-                    promise.complete(new JsonObject().put(Constants.MESSAGE,"Provision Successfull for discoveryId " + discoveryId));
-                })
-                .onFailure(cause ->
-                {
-                    LOGGER.error("Failed to create provision for discoveryId {}: {}", discoveryId, cause.getMessage());
-
-                    promise.fail(cause.getMessage());
                 });
+            }
+            catch (Exception exception)
+            {
+                LOGGER.error("Error processing DB response for discoveryId {}: {}", discoveryId, exception.getMessage());
+                return Future.failedFuture(exception.getMessage());
+            }
+        }).onSuccess(result ->
+        {
+            promise.complete(new JsonObject().put(Constants.MESSAGE, "Provision Successful for discoveryId " + discoveryId));
+        }).onFailure(cause ->
+        {
+            LOGGER.error("Failed to create provision for discoveryId {}: {}", discoveryId, cause.getMessage());
+            promise.fail(cause.getMessage());
+        });
 
         return promise.future();
     }
@@ -171,44 +172,48 @@ public class ProvisionService extends BaseService<JsonObject>
                     .put(Constants.DB_QUERY, ProvisionQueries.SELECT_PROVISIONS_BY_STATUS)
                     .put(Constants.DB_PARAMS, new JsonArray().add(status));
 
-            return vertx.eventBus().<JsonObject>request(Constants.DB_EXECUTE_EVENTBUS, dbRequest)
-                    .compose(reply ->
-                    {
-                        var rows = reply.body();
-                        var provisionList = new JsonArray();
+            return customQueryExecutor(dbRequest).compose(reply ->
+            {
+                try
+                {
+                    var rows = reply.getJsonObject(Constants.RESULT);
+                    var provisionList = new JsonArray();
+                    var rowsArray = rows.getJsonArray(Constants.ROWS, new JsonArray());
 
-                        var rowsArray = rows.getJsonArray(Constants.ROWS, new JsonArray());
-                        for (var i = 0; i < rowsArray.size(); i++)
+                    for (var i = 0; i < rowsArray.size(); i++)
+                    {
+                        try
                         {
-                            try
-                            {
-                                var row = rowsArray.getJsonObject(i);
-                                var provision = new JsonObject()
-                                        .put(Constants.MONITOR_ID, row.getLong(Constants.MONITOR_ID))
-                                        .put(Constants.DISC_NAME, row.getString(Constants.DISC_NAME))
-                                        .put(Constants.PROVISION_STATUS, row.getBoolean("status", true));
+                            var row = rowsArray.getJsonObject(i);
+                            var provision = new JsonObject()
+                                    .put(Constants.MONITOR_ID, row.getLong(Constants.MONITOR_ID))
+                                    .put(Constants.DISC_NAME, row.getString(Constants.DISC_NAME))
+                                    .put(Constants.PROVISION_STATUS, row.getBoolean("status", true));
 
-                                provisionList.add(provision);
-                            }
-                            catch (Exception exception)
-                            {
-                                LOGGER.error("Error processing row {}: {}", i, exception.getMessage());
-                            }
+                            provisionList.add(provision);
                         }
+                        catch (Exception exception)
+                        {
+                            LOGGER.error("Error processing row {}: {}", i, exception.getMessage());
+                        }
+                    }
 
-                        return Future.succeededFuture(ApiResponse.success(new JsonObject().put("provisions", provisionList)).toJson());
-                    })
-                    .recover(error ->
-                    {
-                        LOGGER.error("Failed to fetch provisions: {}", error.getMessage());
-
-                        return Future.succeededFuture(ApiResponse.error(500, "Failed to fetch provisions: " + error.getMessage()).toJson());
-                    });
+                    return Future.succeededFuture(new JsonObject().put("provisions", provisionList));
+                }
+                catch (Exception exception)
+                {
+                    LOGGER.error("Error processing DB response: {}", exception.getMessage());
+                    return Future.succeededFuture(ApiResponse.error(500, "Error processing DB response: " + exception.getMessage()).toJson());
+                }
+            }).recover(error ->
+            {
+                LOGGER.error("Failed to fetch provisions: {}", error.getMessage());
+                return Future.succeededFuture(ApiResponse.error(500, "Failed to fetch provisions: " + error.getMessage()).toJson());
+            });
         }
         catch (Exception exception)
         {
             LOGGER.error("Error in getProvisionsByStatus: {}", exception.getMessage());
-
             return Future.succeededFuture(ApiResponse.error(500, "Error fetching provisions: " + exception.getMessage()).toJson());
         }
     }

@@ -305,7 +305,7 @@ public abstract class BaseService<T>
         {
             return executeDbRequest(dbRequest, "customQuery").compose(rows ->
             {
-                return Future.succeededFuture(new JsonObject().put("result", rows));
+                return Future.succeededFuture(new JsonObject().put(Constants.RESULT, rows));
             });
         }
         catch (Exception exception)
