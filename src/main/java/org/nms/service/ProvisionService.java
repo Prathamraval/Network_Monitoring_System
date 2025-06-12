@@ -198,7 +198,7 @@ public class ProvisionService extends BaseService<JsonObject>
                         }
                     }
 
-                    return Future.succeededFuture(new JsonObject().put("provisions", provisionList));
+                    return Future.succeededFuture(new JsonObject().put(Constants.PROVISIONS, provisionList));
                 }
                 catch (Exception exception)
                 {

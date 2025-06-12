@@ -24,7 +24,7 @@ public class PollingQueries
     public static final String SELECT_POLLING_PROFILE_BY_ID = """
             SELECT monitor_id, data, timestamp
             FROM Polling_data
-            WHERE id = $1""";
+            WHERE monitor_id = $1""";
 
     // Read all polling profiles
     public static final String SELECT_ALL_POLLING_DATA = """
