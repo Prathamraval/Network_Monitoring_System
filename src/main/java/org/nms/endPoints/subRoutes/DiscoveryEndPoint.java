@@ -120,6 +120,23 @@ public class DiscoveryEndPoint extends BaseEndPoint<JsonObject>
                         ResponseUtil.handleResponse(ctx, ApiResponse.error(400, "Invalid status format").toJson());
                     }
                 });
+
+            router.get("/provisioned/:status")
+                .handler(ctx ->
+                {
+                    try
+                    {
+                        var status = Boolean.parseBoolean(ctx.pathParam(Constants.STATUS));
+                        discoveryService.getNotProvisionedDiscoveries(status)
+                                .onSuccess(result -> ResponseUtil.handleResponse(ctx, result))
+                                .onFailure(error -> ResponseUtil.handleResponse(ctx, new JsonObject().put(Constants.ERROR, error.getMessage())));
+                    }
+                    catch (Exception exception)
+                    {
+                        ResponseUtil.handleResponse(ctx, ApiResponse.error(400, "Invalid status format").toJson());
+                    }
+
+                });
     }
 
     public static JsonObject buildDiscoveryDetails(JsonObject row)

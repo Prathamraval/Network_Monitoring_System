@@ -224,7 +224,7 @@ public class ZMQCommunication extends AbstractVerticle
 
     private Future<Void> initializeZmq()
     {
-        var promise = Promise.<Void>promise();;
+        var promise = Promise.<Void>promise();
 
         // Run ZMQ operations on a separate thread to not block the event loop
         vertx.executeBlocking(blockingPromise ->

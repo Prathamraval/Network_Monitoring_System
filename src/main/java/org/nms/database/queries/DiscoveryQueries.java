@@ -48,6 +48,47 @@ public class DiscoveryQueries
         JOIN credential_profiles c ON d. credential_id = c.id;
     """;
 
+    public static final String SELECT_NOT_PROVISIONED_DISCOVERIES = """
+        SELECT 
+            d.id AS discovery_id,
+            d.discovery_name,
+            d.ip_address,
+            d.status,
+            d.wait_time,
+            d.port_no,
+            d.lastdiscoverytime,
+            c.id AS credential_id,
+            c.profile_name,
+            c.username,
+            c.protocol
+        FROM discovery_profiles d
+        JOIN credential_profiles c ON d.credential_id = c.id
+        WHERE NOT EXISTS (
+            SELECT 1 FROM provision p WHERE p.discovery_id = d.id
+        );
+    """;
+
+    public static final String SELECT_PROVISIONED_DISCOVERIES = """
+        SELECT 
+            d.id AS discovery_id,
+            d.discovery_name,
+            d.ip_address,
+            d.status,
+            d.wait_time,
+            d.port_no,
+            d.lastdiscoverytime,
+            c.id AS credential_id,
+            c.profile_name,
+            c.username,
+            c.protocol
+        FROM discovery_profiles d
+        JOIN credential_profiles c ON d.credential_id = c.id
+        WHERE EXISTS (
+            SELECT 1 FROM provision p WHERE p.discovery_id = d.id
+        );
+    """;
+
+
     public static final String SELECT_DISCOVERY_BY_STATUS_WITH_CREDENTIALS = """
         SELECT 
             d.id AS discovery_id,

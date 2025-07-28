@@ -171,49 +171,6 @@ public class DiscoveryService extends BaseService<JsonObject>
             return Future.succeededFuture(ApiResponse.error(500, exception.getMessage()).toJson());
         }
     }
-    public Future<JsonObject> processRunDiscovery(Long discoveryId)
-    {
-        var promise = Promise.<JsonObject>promise();
-        try
-        {
-            if (discoveryId == null)
-            {
-                return Future.failedFuture("discoveryId is required");
-            }
-
-            LOGGER.info("Sending discovery request for ID: {}", discoveryId);
-
-            // Create a unique reply address
-            var replyAddress = "discovery.reply." + discoveryId ;
-
-            // Set up temporary consumer for response
-            var consumer = vertx.eventBus().<JsonObject>localConsumer(replyAddress, message ->
-            {
-                LOGGER.info("Received discovery response {}", message.body());
-                promise.complete(message.body());
-                // Unregister the consumer after handling the response
-            });
-
-            // Send discoveryId to DiscoveryVerticle with reply address
-            var request = new JsonObject()
-                    .put(Constants.DISCOVERY_ID, discoveryId)
-                    .put(Constants.REPLY_ADDRESS, replyAddress);
-
-            vertx.eventBus().send("discovery.run", request);
-
-            return promise.future().onComplete(ar ->
-            {
-                consumer.unregister();
-                LOGGER.debug("Unregistered consumer for address: {}", replyAddress);
-            });
-
-        }
-        catch (Exception exception)
-        {
-            LOGGER.error("Error in runDiscovery: {}", exception.getMessage());
-            return Future.succeededFuture(ApiResponse.error(500, exception.getMessage()).toJson());
-        }
-    }
 
     public Future<JsonObject> processRunDiscovery(JsonObject requestBody)
     {
@@ -244,6 +201,47 @@ public class DiscoveryService extends BaseService<JsonObject>
         catch (Exception exception)
         {
             LOGGER.error("Error in processRunDiscovery: {}", exception.getMessage());
+            return Future.succeededFuture(ApiResponse.error(500, exception.getMessage()).toJson());
+        }
+    }
+
+    public Future<JsonObject> getNotProvisionedDiscoveries(boolean status)
+    {
+        LOGGER.info("Fetching not provisioned discoveries");
+
+        try
+        {
+            var query = status  ? DiscoveryQueries.SELECT_PROVISIONED_DISCOVERIES : DiscoveryQueries.SELECT_NOT_PROVISIONED_DISCOVERIES;
+            var params = new JsonArray();
+
+            var dbRequest = new JsonObject()
+                    .put(Constants.DB_QUERY, query)
+                    .put(Constants.DB_PARAMS, params);
+
+            return customQueryExecutor(dbRequest).compose(reply ->
+            {
+                var rows = reply.getJsonObject(Constants.RESULT);
+                if (rows.getInteger(Constants.ROW_COUNT, 0) == 0)
+                {
+                    LOGGER.info("No not provisioned discoveries found");
+                    return Future.succeededFuture(ApiResponse.success(new JsonObject().put("entities", new JsonArray())).toJson());
+                }
+
+                var discoveries = new JsonArray();
+                var rowsArray = rows.getJsonArray(Constants.ROWS, new JsonArray());
+
+                for (var i = 0; i < rowsArray.size(); i++)
+                {
+                    var row = rowsArray.getJsonObject(i);
+                    discoveries.add(getRowToResponseMapper().apply(row));
+                }
+
+                return Future.succeededFuture(ApiResponse.success(new JsonObject().put("entities", discoveries)).toJson());
+            });
+        }
+        catch (Exception exception)
+        {
+            LOGGER.error("Error in getNotProvisionedDiscoveries: {}", exception.getMessage());
             return Future.succeededFuture(ApiResponse.error(500, exception.getMessage()).toJson());
         }
     }

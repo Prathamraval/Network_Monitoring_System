@@ -198,11 +198,30 @@ public abstract class BaseService<T>
                     return Future.failedFuture("No entity found with ID: " + id);
 
                 }
+//
+//                var row = rows.getJsonArray(Constants.ROWS).getJsonObject(0);
+//                var response = getRowToResponseMapper().apply(row);
+//
+                var entities = new JsonArray();
 
-                var row = rows.getJsonArray(Constants.ROWS).getJsonObject(0);
-                var response = getRowToResponseMapper().apply(row);
+                var rowsArray = rows.getJsonArray(Constants.ROWS, new JsonArray());
 
-                return Future.succeededFuture(new JsonObject().put(Constants.ENTITY, response));
+                for (var i = 0; i < rowsArray.size(); i++)
+                {
+                    try
+                    {
+                        var row = rowsArray.getJsonObject(i);
+
+                        entities.add(getRowToResponseMapper().apply(row));
+                    }
+                    catch (Exception exception)
+                    {
+
+                        LOGGER.error("Error processing row: {}", exception.getMessage());
+                    }
+                }
+                return Future.succeededFuture(new JsonObject().put(Constants.ENTITY, entities));
+
             });
         }
         catch (Exception exception)

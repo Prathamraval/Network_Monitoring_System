@@ -12,7 +12,6 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,6 +47,7 @@ public class PollingService extends BaseService<JsonObject>
     {
         vertx.eventBus().<JsonObject>consumer(Constants.EVENT_PROVISION_CHANGED, message ->
         {
+            LOGGER.info("Received event on {}: {}", Constants.EVENT_PROVISION_CHANGED, message.body().encodePrettily());
             var event = message.body();
             var action = event.getString(Constants.ACTION);
             var provision = event.getJsonObject("provision");

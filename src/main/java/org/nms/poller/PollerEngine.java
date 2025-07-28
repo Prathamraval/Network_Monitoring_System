@@ -27,7 +27,6 @@ public class PollerEngine extends AbstractVerticle
     private PollingService pollingService;
     private long timerMetricsId;
 
-    // OPTIMIZED: Reduced from 5 HashMaps to just 2
     private final Map<String, BatchInfo> activeBatches = new ConcurrentHashMap<>(); // Consolidated batch tracking
     private final Set<Long> pendingDevices = ConcurrentHashMap.newKeySet(); // Thread-safe set
 

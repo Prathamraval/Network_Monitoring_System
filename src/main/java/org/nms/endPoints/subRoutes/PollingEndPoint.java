@@ -8,12 +8,10 @@ import org.nms.utils.Constants;
 public class PollingEndPoint extends BaseEndPoint<JsonObject>
 {
 
-    private final PollingService pollingService;
 
     public PollingEndPoint()
     {
         super(new PollingService(), Constants.MONITOR_ID);
-        this.pollingService = (PollingService) service;
     }
 
     @Override

@@ -92,13 +92,22 @@ public class ProvisionService extends BaseService<JsonObject>
     {
         return row -> new JsonObject()
                 .put(Constants.MONITOR_ID, row.getInteger(Constants.MONITOR_ID))
+                .put(Constants.DISC_NAME, row.getString(Constants.DISC_NAME))
                 .put(Constants.DISC_IP_ADDRESS, row.getString(Constants.DISC_IP_ADDRESS))
                 .put(Constants.DISC_PORT_NO, row.getInteger(Constants.DISC_PORT_NO))
-                .put(Constants.CRED_USERNAME, row.getString(Constants.CRED_USERNAME))
-                .put(Constants.CRED_PASSWORD, row.getString(Constants.CRED_PASSWORD))
                 .put(Constants.CRED_PROTOCOL, row.getString(Constants.CRED_PROTOCOL))
                 .put(Constants.STATUS, row.getBoolean(Constants.PROVISION_STATUS, true))
                 .put(Constants.DISC_WAIT_TIME, row.getInteger(Constants.DISC_WAIT_TIME));
+
+//        return row -> new JsonObject()
+//                .put(Constants.MONITOR_ID, row.getInteger(Constants.MONITOR_ID))
+//                .put(Constants.DISC_IP_ADDRESS, row.getString(Constants.DISC_IP_ADDRESS))
+//                .put(Constants.DISC_PORT_NO, row.getInteger(Constants.DISC_PORT_NO))
+//                .put(Constants.CRED_USERNAME, row.getString(Constants.CRED_USERNAME))
+//                .put(Constants.CRED_PASSWORD, row.getString(Constants.CRED_PASSWORD))
+//                .put(Constants.CRED_PROTOCOL, row.getString(Constants.CRED_PROTOCOL))
+//                .put(Constants.STATUS, row.getBoolean(Constants.PROVISION_STATUS, true))
+//                .put(Constants.DISC_WAIT_TIME, row.getInteger(Constants.DISC_WAIT_TIME));
     }
 
     public Future<JsonObject> createProvision(Long discoveryId)
@@ -136,7 +145,7 @@ public class ProvisionService extends BaseService<JsonObject>
                         {
                             vertx.eventBus().send(Constants.EVENT_PROVISION_CHANGED, new JsonObject()
                                     .put(Constants.ACTION, "create")
-                                    .put(PROVISION, result.getJsonObject(Constants.ENTITY).put(Constants.LAST_POLL, null)));
+                                    .put(PROVISION, result.getJsonArray(Constants.ENTITY).getJsonObject(0).put(Constants.LAST_POLL, null)));
                         }
                         catch (Exception exception)
                         {
